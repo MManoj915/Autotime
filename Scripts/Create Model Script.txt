@@ -1,0 +1,29 @@
+DECLARE L_RULES VARCHAR2(3000);
+BEGIN
+FOR HDR IN(SELECT * FROM USER_TAB_COLUMNS WHERE TABLE_NAME='IM_MEMBERPOLICY' ORDER BY COLUMN_ID) LOOP 
+IF Upper(HDR.DATA_TYPE) = 'DATE' THEN
+L_RULES := 'public DateTime '||InitCap(HDR.COLUMN_NAME)||' {get ; set; }';
+Dbms_Output.PUT_LINE(L_RULES);
+L_RULES := '';
+Dbms_Output.PUT_LINE(L_RULES);   
+ELSIF Upper(HDR.DATA_TYPE) = 'NUMBER' AND HDR.DATA_PRECISION > 3 THEN
+L_RULES := 'public long '||InitCap(HDR.COLUMN_NAME)||' {get ; set; }';
+Dbms_Output.PUT_LINE(L_RULES);
+L_RULES := '';
+Dbms_Output.PUT_LINE(L_RULES);   
+ELSIF Upper(HDR.DATA_TYPE) = 'NUMBER' AND HDR.DATA_PRECISION < 4 THEN
+L_RULES := 'public int '||InitCap(HDR.COLUMN_NAME)||' {get ; set; }';
+Dbms_Output.PUT_LINE(L_RULES);
+L_RULES := '';
+Dbms_Output.PUT_LINE(L_RULES);   
+ELSE 
+L_RULES := 'public int '||InitCap(HDR.COLUMN_NAME)||' {get ; set; }';
+Dbms_Output.PUT_LINE(L_RULES);
+L_RULES := '';
+Dbms_Output.PUT_LINE(L_RULES);   
+END IF; 
+END LOOP;
+END; 
+
+
+                                            

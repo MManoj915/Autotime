@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--Project was exported from assembly: C:\Users\Manoj\Desktop\MemberProfile.dll-->
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{542A2BB2-EC8A-4C03-BEFB-CFE505269358}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AssemblyName>MemberProfile</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <ApplicationVersion>1.0.0.0</ApplicationVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Web" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
+    <Reference Include="System.Data" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="Oracle.DataAccess" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Configuration" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="MemberProfile\BundleConfig.cs" />
+    <Compile Include="MemberProfile\FilterConfig.cs" />
+    <Compile Include="MemberProfile\EmailService.cs" />
+    <Compile Include="MemberProfile\SmsService.cs" />
+    <Compile Include="MemberProfile\ApplicationUserManager.cs" />
+    <Compile Include="MemberProfile\ApplicationSignInManager.cs" />
+    <Compile Include="MemberProfile\RouteConfig.cs" />
+    <Compile Include="MemberProfile\Startup.cs" />
+    <Compile Include="MemberProfile\FingerPrint.cs" />
+    <Compile Include="MemberProfile\MvcApplication.cs" />
+    <Compile Include="MemberProfile\Models\ExternalLoginConfirmationViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ExternalLoginListViewModel.cs" />
+    <Compile Include="MemberProfile\Models\SendCodeViewModel.cs" />
+    <Compile Include="MemberProfile\Models\VerifyCodeViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ForgotViewModel.cs" />
+    <Compile Include="MemberProfile\Models\LoginViewModel.cs" />
+    <Compile Include="MemberProfile\Models\RegisterViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ResetPasswordViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ForgotPasswordViewModel.cs" />
+    <Compile Include="MemberProfile\Models\Authorization.cs" />
+    <Compile Include="MemberProfile\Models\ChangePassword.cs" />
+    <Compile Include="MemberProfile\Models\ClaimHistory.cs" />
+    <Compile Include="MemberProfile\Models\ClaimsModel.cs" />
+    <Compile Include="MemberProfile\Models\EnquiryModel.cs" />
+    <Compile Include="MemberProfile\Models\ApplicationUser.cs" />
+    <Compile Include="MemberProfile\Models\ApplicationDbContext.cs" />
+    <Compile Include="MemberProfile\Models\LocationContext.cs" />
+    <Compile Include="MemberProfile\Models\LoginModel.cs" />
+    <Compile Include="MemberProfile\Models\IndexViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ManageLoginsViewModel.cs" />
+    <Compile Include="MemberProfile\Models\FactorViewModel.cs" />
+    <Compile Include="MemberProfile\Models\SetPasswordViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ChangePasswordViewModel.cs" />
+    <Compile Include="MemberProfile\Models\AddPhoneNumberViewModel.cs" />
+    <Compile Include="MemberProfile\Models\VerifyPhoneNumberViewModel.cs" />
+    <Compile Include="MemberProfile\Models\ConfigureTwoFactorViewModel.cs" />
+    <Compile Include="MemberProfile\Models\Member.cs" />
+    <Compile Include="MemberProfile\Models\MemberDetails.cs" />
+    <Compile Include="MemberProfile\Models\MemberModel.cs" />
+    <Compile Include="MemberProfile\Models\MemberPolicyDetails.cs" />
+    <Compile Include="MemberProfile\Models\Provider.cs" />
+    <Compile Include="MemberProfile\Models\ProviderClaimHistory.cs" />
+    <Compile Include="MemberProfile\Models\ProviderModel.cs" />
+    <Compile Include="MemberProfile\Models\ProviderNetwork.cs" />
+    <Compile Include="MemberProfile\Models\ValidateCredential.cs" />
+    <Compile Include="MemberProfile\Controllers\AccountController.cs" />
+    <Compile Include="MemberProfile\Controllers\ClaimsController.cs" />
+    <Compile Include="MemberProfile\Controllers\EnquiryController.cs" />
+    <Compile Include="MemberProfile\Controllers\HomeController.cs" />
+    <Compile Include="MemberProfile\Controllers\LoginController.cs" />
+    <Compile Include="MemberProfile\Controllers\ManageController.cs" />
+    <Compile Include="MemberProfile\Controllers\MemberController.cs" />
+    <Compile Include="MemberProfile\Controllers\MemberValidityController.cs" />
+    <Compile Include="MemberProfile\Controllers\ProviderClaimHistoryController.cs" />
+    <Compile Include="MemberProfile\Controllers\ProviderController.cs" />
+    <Compile Include="MemberProfile\Controllers\ReimbursementController.cs" />
+    <Compile Include="MemberProfile\Controllers\ChangePasswordController.cs" />
+    <Compile Include="zkemkeeper\CZKEM.cs" />
+    <Compile Include="zkemkeeper\IZKEM.cs" />
+    <Compile Include="zkemkeeper\_IZKEMEvents.cs" />
+    <Compile Include="zkemkeeper\_IZKEMEvents_Event.cs" />
+    <Compile Include="zkemkeeper\_IZKEMEvents_OnAttTransactionExEventHandler.cs" />
+    <Compile Include="zkemkeeper\_IZKEMEvents_OnVerifyEventHandler.cs" />
+    <Compile Include="AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

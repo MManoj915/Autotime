@@ -1,0 +1,117 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Diagnostics;
+using System.Linq;
+using System.ServiceProcess;
+using System.Text;
+using System.Threading.Tasks;
+using AV.eClaimsEngine.BusinessObjects.Helpers;
+using eClaimsEngine;
+using System.Configuration;
+using SBS.Base;
+using SBS.Business.Objects.Administration;
+using SBS.Business.Objects.HumanResource.NGI.OnlineTransaction;
+using System.Threading;
+using Dapper;
+using System.Drawing;
+using Oracle.DataAccess.Client;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using System.IO;
+using System.Net.Mail;
+
+namespace PriorAuthorization
+{
+    public partial class Service1 : ServiceBase
+    { 
+        private Thread _thread;
+        private int ThreadTimeLimit = 1000;
+
+        private IDbConnection _db = new OracleConnection(ConfigurationSettings.AppSettings["ConnectionString"].ToString());
+
+        public Service1()
+        {
+            string TimeLimit = ConfigurationSettings.AppSettings["TIMELIMIT"].ToString();
+
+            if (string.IsNullOrEmpty(TimeLimit))
+                TimeLimit = "1";
+            ThreadTimeLimit = (Convert.ToInt16(TimeLimit) * 60000);
+            InitializeComponent(); 
+            DateTime now = DateTime.Now;
+            var startDate = new DateTime(now.Year, now.Month, 1);
+            var endDate = startDate.AddMonths(1).AddDays(-1);
+            //Execute();           
+        }
+
+        protected override void OnStart(string[] args)
+        { 
+            this._thread = new Thread(new ThreadStart(this.Execute));
+            this._thread.Start(); 
+        }
+
+        private void Execute()
+        {
+            try
+            { 
+                OracleConnection con = new OracleConnection(ConfigurationSettings.AppSettings["ConnectionString"]);
+                OracleCommand cmd = new OracleCommand();
+                cmd.CommandText = "SELECT * FROM IM_SEND_NOTIFICATIONS WHERE NVL(STATUS,0) = 0";
+                cmd.Connection = con;
+                con.Open();
+                OracleDataReader dr = cmd.ExecuteReader();
+                if (dr.HasRows)
+                {
+                    while (dr.Read())
+                    {  
+                        EASendMail.SmtpMail oMail = new EASendMail.SmtpMail("TryIt");
+                        EASendMail.SmtpClient oSmtp = new EASendMail.SmtpClient();
+
+                        // Set sender email address, please change it to yours
+                        oMail.From = "compass@ngiuae.com";
+
+                        // Set recipient email address, please change it to yours
+                        oMail.To = "sanjay@ngiuae.com";
+                        oMail.Cc = "manoj.compassint@gmail.com";
+
+                        // Set email subject
+                        oMail.Subject = dr["SUBJECT"].ToString(); 
+
+                        // Set email body
+                        oMail.TextBody = dr["MESSAGE"].ToString();
+
+                        // Set SMTP server address to "".
+                        EASendMail.SmtpServer oServer = new EASendMail.SmtpServer("148.0.0.67");
+
+                        oServer.User = "ngidomain\\compass";
+                        oServer.Password = "com*987";
+                        oServer.Port = 25;
+                        cmd.CommandText = "Delete from IM_SEND_NOTIFICATIONS Where Message = '" + dr["MESSAGE"].ToString() + "'";
+                        cmd.Connection = con;
+                        cmd.CommandTimeout = 0;
+                        Convert.ToInt32(cmd.ExecuteNonQuery());
+                        con.Close(); 
+                        oSmtp.SendMail(oServer, oMail);
+                    }
+                }
+            }
+            catch (Exception Exm)
+            {
+                string Msg = Exm.Message;
+                EventLog.WriteEntry("Authorization", Msg);
+            }
+        }
+
+        protected override void OnStop()
+        {
+            if (this._thread != null)
+            {
+                this._thread.Abort();
+                this._thread.Join();
+            }
+            //EventLog.WriteEntry("Autotime Stop", "Service Stoped");
+        }
+         
+    }
+}

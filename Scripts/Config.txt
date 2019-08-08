@@ -1,0 +1,13 @@
+  DateTime SysDate = DateTime.Now;
+                    DateTime ServiceStartTime = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.Today.Day,
+                                              Convert.ToInt16(ConfigurationSettings.AppSettings["STARTPROCESSTIME"].Substring(0, 2)),
+                                              Convert.ToInt16(ConfigurationSettings.AppSettings["STARTPROCESSTIME"].Substring(3, 2)), 0);
+                    DateTime ServiceEndTime = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.Today.Day,
+                            Convert.ToInt16(ConfigurationSettings.AppSettings["ENDPROCESSTIME"].Substring(0, 2)),
+                            Convert.ToInt16(ConfigurationSettings.AppSettings["ENDPROCESSTIME"].Substring(3, 2)), 0);
+                    string SysDate24Hours = SysDate.ToString("HH:mm", CultureInfo.CurrentCulture);
+                    string StartDate24Hours = ServiceStartTime.ToString("HH:mm", CultureInfo.CurrentCulture);
+                    string EndDate24Hours = ServiceEndTime.ToString("HH:mm", CultureInfo.CurrentCulture);
+                    double SystemTime = TimeToMinutes(SysDate.ToString());
+                    double Starttime = TimeToMinutes(ServiceStartTime.ToString());
+                    double Endtime = TimeToMinutes(ServiceEndTime.ToString());

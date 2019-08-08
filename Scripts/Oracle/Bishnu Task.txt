@@ -1,0 +1,4 @@
+1.Paid Claim can update the Branch.
+2.Commission Separate Table.
+3.NGI Fees in EForm Table.
+4.Branch code in Session

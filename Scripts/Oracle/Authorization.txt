@@ -1,0 +1,333 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Diagnostics;
+using System.Linq;
+using System.ServiceProcess;
+using System.Text;
+using System.Threading.Tasks;
+using AV.eClaimsEngine.BusinessObjects.Helpers;
+using eClaimsEngine;
+using System.Configuration;
+using SBS.Base;
+using SBS.Business.Objects.Administration;
+using SBS.Business.Objects.HumanResource.NGI.OnlineTransaction;
+using System.Threading;
+using Dapper;
+using System.Drawing;
+using Oracle.DataAccess.Client;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using System.IO;
+using System.Net.Mail;
+
+namespace PriorAuthorization
+{
+    public partial class Service1 : ServiceBase
+    {
+        eClaimEngine DhpoEng;
+        eClaimEngine CEEDEng;
+        eClaimEngine HAADEng;
+        eClaimEngine PBMEng;
+        Schedule sched;
+        FileManager DHPOfileMgr;
+        FileManager HAADfileMgr;
+        FileManager DHPOCEEDfileMgr;
+        FileManager PBMfileMgr;
+        private Thread _thread;
+        private int ThreadTimeLimit = 1000;
+
+        private IDbConnection _db = new OracleConnection(ConfigurationSettings.AppSettings["ConnectionString"].ToString());
+
+        public Service1()
+        {
+            string TimeLimit = ConfigurationSettings.AppSettings["TIMELIMIT"].ToString();
+
+            if (string.IsNullOrEmpty(TimeLimit))
+                TimeLimit = "1";
+            ThreadTimeLimit = (Convert.ToInt16(TimeLimit) * 60000);
+            InitializeComponent();
+            InitializeBusinessVariables();
+            DateTime now = DateTime.Now;
+            var startDate = new DateTime(now.Year, now.Month, 1);
+            var endDate = startDate.AddMonths(1).AddDays(-1);
+            //Execute();           
+        }
+
+        protected override void OnStart(string[] args)
+        {
+            InitializeBusinessVariables();
+            this._thread = new Thread(new ThreadStart(this.SendNotificationEmail));
+            this._thread.Start(); 
+        }
+
+        private void Execute()
+        {
+
+
+            List<string> Errors = new List<string>();
+            string DownloadDhpoDirectory = "", DownloadHaadDirectory = "", UploadDhpoDirectory = "", UploadHaadDirectory = "", DownloadPriorRequestDirectory = "", PriorAuthorizationDirectory = "";
+            string RequestCEEDDirectory = "", ResponseCEEDDirectory = "";
+            string DownloadPBMDirectory = "";
+           
+            bool doprocess = false;
+            try
+            {
+                while (!doprocess)
+                {
+                    DateTime SDate = DateTime.Now.AddDays(-2);
+                    DateTime EDate = DateTime.Now.AddDays(-1);
+                    DateTime CurrentDate = DateTime.Now;
+                    int DaysCount = Convert.ToInt16((CurrentDate - SDate).TotalDays) + 1;
+
+                    for (int ds = 0; ds < DaysCount; ds++)
+                    {
+                        SDate = SDate.AddDays(1);
+                        EDate = EDate.AddDays(1);
+                         
+                        Business<ClaimScreenSettingList, ClaimScreenSetting> ClaimSettingBus = new Business<ClaimScreenSettingList, ClaimScreenSetting>();
+                        ClaimScreenSettingList ClaimSettingBusList = ClaimSettingBus.GetByCriteria("CCS.Code = " + Helper.CompanyCode, true);
+
+                        #region Claim Company SetUp
+                        //if company have claim setting then proceed
+                        if (ClaimSettingBusList.Count > 0)
+                        {
+                            #region Eclaim Files Folder for WebService
+                            // Eg : DHPO,HAAD
+                            foreach (ClaimScreenSettingDtl Dtl in ClaimSettingBusList[0].ClaimScreenSettingDtlList)
+                            {
+                                #region DHPO Download and Upload Directory
+
+                                if (Dtl.ProviderCode == 1)  // Provider DHPO
+                                {
+                                    foreach (ClaimScreenProcessDtl ProcessDtl in Dtl.ClaimScreenProcessDtlList)
+                                    {
+                                        if (ProcessDtl.Active == true)
+                                        {
+                                            if (ProcessDtl.TypeCode == 1)
+                                                DownloadDhpoDirectory = ProcessDtl.DownloadDirectory;
+                                            else if (ProcessDtl.TypeCode == 2)
+                                                UploadDhpoDirectory = ProcessDtl.DownloadDirectory;
+                                            else if (ProcessDtl.TypeCode == 3)
+                                                DownloadPriorRequestDirectory = ProcessDtl.DownloadDirectory;
+                                            else if (ProcessDtl.TypeCode == 4)
+                                                PriorAuthorizationDirectory = ProcessDtl.DownloadDirectory;
+                                        }
+                                    }
+
+                                    DHPOfileMgr = new FileManager(DownloadDhpoDirectory, UploadDhpoDirectory, RequestCEEDDirectory, DownloadPriorRequestDirectory, PriorAuthorizationDirectory, DownloadPBMDirectory);
+
+
+
+                                    foreach (ClaimScreenUserDtl UserDtl in Dtl.ClaimScreenUserDtlList)
+                                    {
+                                        DhpoEng = new eClaimEngine(EngineProvider.DHPOService, ConfigurationManager.AppSettings["ConnectionString"],
+                                                                    UserDtl.User_Name, UserDtl.User_Pwd, DHPOfileMgr);
+                                    }
+                                }
+                                #endregion
+
+                                #region HAAD Download and Upload Directory
+                                if (Dtl.ProviderCode == 2) // Provider HAAD
+                                {
+                                    foreach (ClaimScreenProcessDtl ProcessDtl in Dtl.ClaimScreenProcessDtlList)
+                                    {
+                                        if (ProcessDtl.Active == true)
+                                        {
+                                            if (ProcessDtl.TypeCode == 1)
+                                                DownloadDhpoDirectory = ProcessDtl.DownloadDirectory;
+                                            else if (ProcessDtl.TypeCode == 2)
+                                                UploadDhpoDirectory = ProcessDtl.DownloadDirectory;
+                                            else if (ProcessDtl.TypeCode == 3)
+                                                DownloadPriorRequestDirectory = ProcessDtl.DownloadDirectory;
+                                            else if (ProcessDtl.TypeCode == 4)
+                                                PriorAuthorizationDirectory = ProcessDtl.DownloadDirectory;
+                                        }
+                                    }
+
+                                    HAADfileMgr = new FileManager(DownloadDhpoDirectory, UploadDhpoDirectory, RequestCEEDDirectory, DownloadPriorRequestDirectory, PriorAuthorizationDirectory, DownloadPBMDirectory);
+
+
+                                    foreach (ClaimScreenUserDtl UserDtl in Dtl.ClaimScreenUserDtlList)
+                                    {
+                                        HAADEng = new eClaimEngine(EngineProvider.HAADService, ConfigurationManager.AppSettings["ConnectionString"],
+                                                                    UserDtl.User_Name, UserDtl.User_Pwd, HAADfileMgr);
+                                    }
+
+
+                                }
+                                #endregion
+
+                                #region DHPO CEED Download and Upload Directory
+                                if (Dtl.ProviderCode == 3)  // Provider DHPO CEED
+                                {
+                                    foreach (ClaimScreenProcessDtl ProcessDtl in Dtl.ClaimScreenProcessDtlList)
+                                    {
+                                        if (ProcessDtl.Active == true)
+                                        {
+                                            if (ProcessDtl.TypeCode == 5)
+                                                RequestCEEDDirectory = ProcessDtl.DownloadDirectory;
+
+                                        }
+                                    }
+
+                                    DHPOCEEDfileMgr = new FileManager(DownloadDhpoDirectory, UploadDhpoDirectory, RequestCEEDDirectory, DownloadPriorRequestDirectory, PriorAuthorizationDirectory, DownloadPBMDirectory);
+
+                                    foreach (ClaimScreenUserDtl UserDtl in Dtl.ClaimScreenUserDtlList)
+                                    {
+                                        CEEDEng = new eClaimEngine(EngineProvider.DHPOService, ConfigurationManager.AppSettings["ConnectionString"],
+                                                                UserDtl.User_Name, UserDtl.User_Pwd, DHPOCEEDfileMgr);
+                                    }
+                                }
+                                #endregion
+
+                                #region PBM Download and Upload Directory
+                                if (Dtl.ProviderCode == 5)  // Provider PBM
+                                {
+                                    foreach (ClaimScreenProcessDtl ProcessDtl in Dtl.ClaimScreenProcessDtlList)
+                                    {
+                                        if (ProcessDtl.Active == true)
+                                        {
+                                            if (ProcessDtl.TypeCode == 1)
+                                                DownloadPBMDirectory = ProcessDtl.DownloadDirectory;
+
+                                        }
+                                    }
+
+                                    PBMfileMgr = new FileManager(DownloadDhpoDirectory, UploadDhpoDirectory, RequestCEEDDirectory, DownloadPriorRequestDirectory, PriorAuthorizationDirectory, DownloadPBMDirectory);
+
+                                    foreach (ClaimScreenUserDtl UserDtl in Dtl.ClaimScreenUserDtlList)
+                                    {
+                                        PBMEng = new eClaimEngine(EngineProvider.PBMService, ConfigurationManager.AppSettings["ConnectionString"],
+                                        UserDtl.User_Name, UserDtl.User_Pwd, PBMfileMgr);
+                                    }
+                                }
+
+                                #endregion
+                            }
+
+                            #endregion
+                            /*EventLog.WriteEntry("Authorization", "PBMAuthorizationStarted");
+                            PBMEng.DownloadPriorAuthorizationClaims();
+                            EventLog.WriteEntry("Authorization", "PBMAuthorizationFinished");*/
+                            EventLog.WriteEntry("Authorization", "DHAAuthorizationStarted");
+                            DhpoEng.PriorAuthorizationClaims();
+                            DhpoEng.DownloadPriorApprovals(SDate.ToString("dd/MM/yyyy"), EDate.ToString("dd/MM/yyyy"), 1);
+                            DhpoEng.DownloadPriorApprovals(SDate.ToString("dd/MM/yyyy"), EDate.ToString("dd/MM/yyyy"), 2); 
+                            EventLog.WriteEntry("Authorization", "DHAAuthorizationFinished");
+                        }
+                        #endregion
+                        EventLog.WriteEntry("Authorization", "AuthorizationFinished");
+                        Thread.Sleep(ThreadTimeLimit);
+                    }
+                    
+                }
+            }
+            catch (Exception E)
+            {
+                string ErrorMessage = E.Message;
+                EventLog.WriteEntry("Authorization", ErrorMessage);
+                Thread.Sleep(ThreadTimeLimit);
+            }
+
+        }
+
+        protected override void OnStop()
+        {
+            if (this._thread != null)
+            {
+                this._thread.Abort();
+                this._thread.Join();
+            }
+            //EventLog.WriteEntry("Autotime Stop", "Service Stoped");
+        }
+
+        private void InitializeBusinessVariables()
+        {
+            CheckConnectionString();
+            //ReadConfigValues();
+            Helper.GetHelper()["EnableTraceLog"] = false;
+            Helper.GetHelper()["LoginTime"] = DateTime.Now.ToString("dd-MM-yyyy HH-mm-ss");
+            Helper.GetHelper()["TraceErrorLogPath"] = "Online-Service";
+            Helper.GetHelper()["TraceLogFileName"] = ConfigurationSettings.AppSettings["ErrorLogFile"].ToString();
+            Helper.GetHelper()["ErrorLogFileName"] = ConfigurationSettings.AppSettings["ErrorLogFile"].ToString();
+            string ServiceCompany = "1";
+            Helper.CompanyCode = Convert.ToInt16(ServiceCompany);
+            Business<CurrentLocationSettingList, CurrentLocationSetting> business = new Business<CurrentLocationSettingList, CurrentLocationSetting>(Helper.UserCode);
+            Helper.LocationCode = 1;
+            CompanySetting byId = new Business<CompanySettingList, CompanySetting>(Helper.UserCode).GetById((long)Helper.CompanyCode, false);
+            Helper.LanguageCode = "en-US";
+            if (byId != null)
+            {
+                Helper.YearCode = byId.YearCode;
+                Helper.DateFormat = byId.DefaultDateFormatName;
+                Helper.TimeFormat = byId.TimeFormatName;
+                Helper.GetHelper()["JSDateFormat"] = "d/m/y";
+                if (Helper.LanguageCode.StartsWith("ar"))
+                {
+                    Helper.DateFormat = "yyyy/MM/dd";
+                }
+            }
+
+            Helper.UserCode = 0x16345785d8a0002L;
+
+
+        }
+
+        private void CheckConnectionString()
+        {
+            if (string.IsNullOrEmpty(Utilities.GetConnectionString()) && (ConfigurationSettings.AppSettings["ConnectionString"] != null))
+            {
+                string str2 = ConfigurationSettings.AppSettings["ConnectionString"].ToString();
+                string[] strArray = str2.Split(new char[] { ';' });
+                string oldValue = string.Empty;
+                string newValue = string.Empty;
+
+                if (!string.IsNullOrEmpty(str2))
+                {
+                    Utilities.SetConnectionString(str2);
+                }
+            }
+        }
+
+        public void SendNotificationEmail()
+        {
+            try
+            {
+                EASendMail.SmtpMail oMail = new EASendMail.SmtpMail("TryIt");
+                EASendMail.SmtpClient oSmtp = new EASendMail.SmtpClient();
+
+                // Set sender email address, please change it to yours
+                oMail.From = "compass@ngiuae.com";
+
+                // Set recipient email address, please change it to yours
+                oMail.To = "sanjay@ngiuae.com"; 
+                oMail.Cc = "manoj.compassint@gmail.com";
+
+                // Set email subject
+                oMail.Subject = "Test Mail";
+
+                // Set email body
+                oMail.TextBody = "Test Mail";
+
+                // Set SMTP server address to "".
+                EASendMail.SmtpServer oServer = new EASendMail.SmtpServer("148.0.0.67");
+
+                oServer.User = "ngidomain\\compass";
+                oServer.Password = "com*987";
+                oServer.Port = 25;
+
+                oSmtp.SendMail(oServer, oMail);
+            }
+            catch (Exception Exm)
+            {
+                string Msg = Exm.Message;
+                EventLog.WriteEntry("Authorization", Msg);
+            }
+
+        }
+
+
+    }
+}

@@ -1,0 +1,101 @@
+select * from (
+select
+GroupName,
+POLICYNAME policyid,
+ClientName policyname,
+StartDate,Enddate,  
+BRANCHNAME,   
+Agent,
+ADMISTRATEBY,  
+paymentmode,   
+nvl(GET_POLICYINCEPTIONPREMIUM(POLICYTYPECODE,POLICYCODE),0) InceptionPremium,
+nvl(GET_POLICYINCADDREFPREMIUM(POLICYTYPECODE,POLICYCODE),0)  ADDREFUNDAMOUNT,
+0  premiumValue,POLICYTYPECODE  from (   
+select
+nvl2(Pol.OLDPOLICYCODE,'Group Renewed Business','Group New Business') as GroupName,
+POL.POLICYNAME ClientName,
+Bar1.Organization_Name BRANCHNAME ,
+Pol.STARTDATE StartDate,pol.enddate enddate
+,nvl(age.AGENT_NAME_EN,BRO.BROKER_NAME_EN) Agent,
+Pol.POLICYID POLICYNAME,
+0 ADDREFUNDAMOUNT,
+GENN2.CONSTANTNAME paymentmode,
+Pol.PolicyCode,
+gen10.ConstantName ADMISTRATEBY,
+bilgen.CONSTANTNAME BillingTypeName,
+'' ENDORSEMENTNO,
+pol.POLICYTYPECODE
+from  (
+select  im_policy.POLICYCODE,  im_policy.POLICYID,  im_policy.POLICYNAME, STARTDATE, ENDDATE,  im_policy.GROUPCODE,  im_policy.MEMBERCODE, FINAL_PREMIUM,  im_policy.AGENTCODE, im_policy.BROKERCODE, OWNERCODE, OLDPOLICYCODE,BILLINGTYPE,PAYMENTMODE,BRANCHCODE,1 POLICYTYPECODE,
+EndP.REFDATE DocDate
+from im_policy   join   (select policycode,min(refdate) refdate from IM_POLICYFINANCEPOSTING group by policycode) EndP on  EndP.policycode=im_policy.policycode and to_char(im_policy.STARTDATE,'RRRR')=to_char(EndP.refdate,'RRRR')
+union all
+select IM_INDIVIDUALPOLICY.INDIVIDUALPOLICYCODE POLICYCODE, POLICYID, POLICYNAME, STARTDATE, ENDDATE, IM_INDIVIDUALPOLICY.GROUPCODE, IM_INDIVIDUALPOLICY.MEMBERCODE, FINAL_PREMIUM, IM_INDIVIDUALPOLICY.AGENTCODE, IM_INDIVIDUALPOLICY.BROKERCODE, OWNERCODE, OLDPOLICYCODE,BILLINGTYPE,PAYMENTMODE,BRANCHCODE,2 POLICYTYPECODE,
+EndP.REFDATE DocDate
+from IM_INDIVIDUALPOLICY   join   (select individualpolicycode,min(refdate) refdate from IM_POLICYFINANCEPOSTING   group by individualpolicycode) EndP on  EndP.individualpolicycode=IM_INDIVIDUALPOLICY.individualpolicycode  and to_char(IM_INDIVIDUALPOLICY.STARTDATE,'RRRR')=to_char(EndP.refdate,'RRRR')
+) Pol
+left join im_Agents age on age.agentcode=pol.AGENTCODE
+left join Im_Brokers Bro on Bro.BrokerCode=pol.BrokerCode
+left join genconstant bilgen on bilgen.CONSTANTVALUE=Pol.BILLINGTYPE and bilgen.CATEGORY='ENDORSEMENTBILLINGTYPE' and bilgen.LANGUAGECODE='en-US'
+left join HR_ORGANIZATIONS_D Bar1 on Bar1.ORGANIZATIONS_CODE=(nvl(Pol.BRANCHCODE,decode(Pol.BILLINGTYPE,0, age.BRANCHCODE,1,Bro.BRANCHCODE,nvl(Pol.BRANCHCODE,nvl(age.BRANCHCODE,Bro.BRANCHCODE)))))
+left join genconstant gen10 on GEN10.CONSTANTVALUE=pol.OWNERCODE and GEN10.CATEGORY='NGIQUOTATIONTYPE' and GEN10.LANGUAGECODE='en-US'
+left join genconstant  genn2 on genn2.CONSTANTVALUE=pol.PaymentMode and genn2.CATEGORY='POLICYPAYMENTMODE' and genn2.LANGUAGECODE='en-US'
+union all  
+select
+'Lost Business' GroupName,
+Pol.POLICYNAME ClientName,
+Bar1.Organization_Name BRANCHNAME ,
+Pol.STARTDATE StartDate,pol.enddate enddate
+,nvl(age.AGENT_NAME_EN,BRO.BROKER_NAME_EN) Agent,
+Pol.POLICYID POLICYNAME,
+0 ADDREFUNDAMOUNT,
+GENN2.CONSTANTNAME paymentmode,
+POL.POLICYCODE,
+gen10.ConstantName ADMISTRATEBY,
+null BillingTypeName,
+null ENDORSEMENTNO,
+1 POLICYTYPECODE
+from
+(
+select * from IM_POLICY  where  POLICYCODE not  in (select nvl(OLDPOLICYCODE,0) from IM_POLICY )  and   
+TO_DATE(ENDDATE , 'DD/MM/RRRR') + 1 BETWEEN TO_DATE('01/01/2017', 'DD/MM/RRRR') AND TO_DATE('30/06/2017', 'DD/MM/RRRR')    
+) Pol
+left join im_Agents age on age.agentcode=Pol.AGENTCODE
+left join Im_Brokers Bro on Bro.BrokerCode=Pol.BrokerCode
+left join HR_ORGANIZATIONS_D Bar1 on Bar1.ORGANIZATIONS_CODE=(nvl(Pol.BRANCHCODE,decode(Pol.BILLINGTYPE,0, age.BRANCHCODE,1,Bro.BRANCHCODE,nvl(Pol.BRANCHCODE,nvl(age.BRANCHCODE,Bro.BRANCHCODE)))))
+left join genconstant gen10 on GEN10.CONSTANTVALUE=pol.OWNERCODE and GEN10.CATEGORY='NGIQUOTATIONTYPE' and GEN10.LANGUAGECODE='en-US'
+left join genconstant  genn2 on genn2.CONSTANTVALUE=pol.PaymentMode and genn2.CATEGORY='POLICYPAYMENTMODE' and genn2.LANGUAGECODE='en-US' 
+group by
+POL.POLICYNAME,nvl(age.AGENT_NAME_EN,BRO.BROKER_NAME_EN),Pol.POLICYID,Pol.StartDate ,
+POL.POLICYCODE,Bar1.Organization_Name,gen10.ConstantName,GENN2.CONSTANTNAME,pol.enddate
+having
+sum(pol.BASE_PERIMUM)>=0     
+union all    
+select
+'Lost Business' GroupName,
+IndPol.POLICYNAME ClientName,
+Bar1.Organization_Name BRANCHNAME ,
+IndPol.STARTDATE StartDate,IndPol.enddate enddate,
+nvl(age.AGENT_NAME_EN,BRO.BROKER_NAME_EN) Agent,
+IndPol.POLICYID POLICYNAME,
+0 ADDREFUNDAMOUNT,
+GENN2.CONSTANTNAME paymentmode,
+IndPol.INDIVIDUALPOLICYCODE ,
+gen10.ConstantName ADMISTRATEBY,
+null BillingTypeName,
+null ENDORSEMENTNO,
+2 POLICYTYPECODE
+from ( select * from IM_INDIVIDUALPOLICY where  INDIvidualPOLICYCODE not  in (select nvl(OLDPOLICYCODE,0) from IM_INDIVIDUALPOLICY )  and  
+TO_DATE(ENDDATE , 'DD/MM/RRRR') + 1 BETWEEN TO_DATE('01/01/2017', 'DD/MM/RRRR') AND TO_DATE('30/06/2017', 'DD/MM/RRRR')) IndPol
+left join im_Agents age on age.agentcode=IndPol.AGENTCODE
+left join Im_Brokers Bro on Bro.BrokerCode=IndPol.BrokerCode
+left join HR_ORGANIZATIONS_D Bar1 on Bar1.ORGANIZATIONS_CODE=(nvl(IndPol.BRANCHCODE,decode(IndPol.BILLINGTYPE,0, age.BRANCHCODE,1,Bro.BRANCHCODE,nvl(IndPol.BRANCHCODE,nvl(age.BRANCHCODE,Bro.BRANCHCODE)))))
+left join genconstant gen10 on GEN10.CONSTANTVALUE=IndPol.OWNERCODE and GEN10.CATEGORY='NGIQUOTATIONTYPE' and GEN10.LANGUAGECODE='en-US'
+left join genconstant  genn2 on genn2.CONSTANTVALUE=IndPol.PaymentMode and genn2.CATEGORY='POLICYPAYMENTMODE' and genn2.LANGUAGECODE='en-US'
+
+group by IndPol.POLICYNAME,nvl(age.AGENT_NAME_EN,BRO.BROKER_NAME_EN),IndPol.POLICYID,IndPol.StartDate,
+IndPol.INDIVIDUALPOLICYCODE,Bar1.Organization_Name,gen10.ConstantName,GENN2.CONSTANTNAME,indpol.enddate
+having
+sum(Indpol.BASE_PERIMUM) >= 0
+)
+) WHERE GROUPNAME = 'Lost Business' AND POLICYTYPECODE = 1   

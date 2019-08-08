@@ -1,0 +1,25 @@
+select * from ( Select * from (select im.*,(im.FIRST_NAME||' '||im.LAST_NAME) MemberName,GEN.CONSTANTNAME as MemberTypeName,
+GEN1.CONSTANTNAME as GenderName,GEN2.CONSTANTNAME as RelationName,GEN3.CONSTANTNAME as DesignationName,
+gen6.ConstantName Marital_Name, GEN4.CONSTANTNAME as NationalityName,GEN5.CONSTANTNAME as NationalityDisplayName,
+IG.GROUP_NAME,GC.CATEGORY_NAME CategoryName,'' Selectt,trunc(months_between(sysdate,IM.DATE_OF_BIRTH)/12) as Age,
+'' EffectiveDate,  (select NGI_GETADDBASEPREMIUM( 100000000000021079 ,1, im.Category_Code,
+Ceil(months_between(sysdate,IM.DATE_OF_BIRTH)/12) ,im.GENDER,im.MARITAL_STATUS ,im.RELATION) from dual) TotalApplyAmount,
+MEM.MEMBER_ID MemParentId from IM_MEMBERS im 
+left join genconstant  gen on GEN.CONSTANTVALUE=im.MEMBER_TYPE and gen.category='MEMBERTYPE' and gen.languagecode='en-US' 
+left join genconstant gen1 on GEN1.CONSTANTVALUE=im.GENDER and gen1.category='Gender' and gen1.languagecode='en-US' 
+left join genconstant gen2 on GEN2.CONSTANTVALUE=im.RELATION  and GEN2.CATEGORY='MEMBERRELATION' and 
+GEN2.LANGUAGECODE='en-US' 
+left join genconstant gen3 on GEN3.CONSTANTVALUE=im.DESIGNATION   and GEN3.CATEGORY='NGIDESIGNATIONS' and 
+GEN3.LANGUAGECODE='en-US' 
+left join genconstant gen4 on GEN4.CONSTANTVALUE=im.NATIONALITY  and GEN4.CATEGORY='FND_NATIONALITY' and 
+GEN4.LANGUAGECODE='en-US' 
+left join genconstant gen5 on GEN5.CONSTANTVALUE=im.NATIONALITY_DISPLAY and GEN5.CATEGORY='NATIONALITY' and 
+GEN5.LANGUAGECODE='en-US' 
+left join IM_GROUPS ig on IG.GROUP_CODE=IM.GROUP_CODE 
+left join im_categories gc on GC.CATEGORY_CODE=im.Category_Code  
+left join IM_MEMBERS mem on mem.Member_Code=IM.PARENT_ID  
+left join genconstant gen6 on gen6.CONSTANTVALUE=im.MARITAL_STATUS and gen6.CATEGORY='MARITAL_STATUS' and 
+gen6.LANGUAGECODE='en-US' 
+join admcompany admcom on ADMCOM.COMPANYCODE=im.COMPANYCODE and ADMCOM.COMPANYCODE=1 
+where  IM.GROUP_CODE=(select GROUPCODE from im_policy where POLICYCODE=100000000000021079)  )im 
+where im.CompanyCode=1 order by nvl(IM.PARENT_ID,IM.MEMBER_CODE ), nvl2(IM.PARENT_ID,0,1)  desc)

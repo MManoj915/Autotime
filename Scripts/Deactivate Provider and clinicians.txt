@@ -1,0 +1,17 @@
+Deactivate Provider :
+
+select pro. *,PR.PROVIDERNAME,pr.PROVIDERID, GEN.CONSTANTNAME statusname,gen3.constantname as 
+AuthorizedStatusName from IM_DEACTIVEPROVIDERDETAILS pro  
+left join im_providers Pr on Pr.PROVIDERCODE=pro.ProviderCode                  
+left join (select constantValue,ConstantName from genconstant where category='AUTHORIZEDSTATUS' and languagecode='en-US')gen3 
+on gen3.constantValue=pro.AuthorizedStatus  
+left join genconstant gen on GEN.CATEGORY='PROVIDERSTATUS'and GEN.CONSTANTVALUE=pro.STATUSCODE and GEN.LANGUAGECODE='en-US' 
+
+Deactive Clinicians:
+
+select pro. *,PR.LICENSEID,PR.NAME CLINICIANNAME, GEN.CONSTANTNAME statusname,gen3.constantname as 
+AuthorizedStatusName from IM_DEACTIVECLINICIANDETAILS pro  
+left join IM_CLINICIANS Pr on Pr.CDCODE=pro.CDCODE                  
+left join (select constantValue,ConstantName from genconstant where category='AUTHORIZEDSTATUS' and languagecode='en-US')gen3 
+on gen3.constantValue=pro.AuthorizedStatus  
+left join genconstant gen on GEN.CATEGORY='PROVIDERSTATUS'and GEN.CONSTANTVALUE=pro.STATUSCODE and GEN.LANGUAGECODE='en-US' 

@@ -1,0 +1,43 @@
+Policy Screen Validations :
+
+1. Date of Birth should be less than the Current Date
+2. Member ID should be duplicated for the Same Policy 
+3. If parent ID is not null, Then check the parent id is the master or not
+4. Parent ID should be self or employee
+5. Both Parent and Relation should have same subgroup
+6. Both Parent and Relation should have same category
+7. Commission Name should not be empty for Other commission
+8. Call the below function after Save . (If authorizedstatus = 0 then call the function)
+   FN_UWPOLICYPOLICYPREMUIMDTL(PolicyCode);
+9. Call the below function once approve button is pressed
+   FN_UWPOLADDMEMBERPOLICY(PolicyCode);
+
+
+IndividualPolicy Screen Validations :
+
+1. Date of Birth should be less than the Current Date
+2. Member ID should be duplicated for the Same Policy 
+3. If parent ID is not null, Then check the parent id is the master or not
+4. Parent ID should be self or employee
+5. Both Parent and Relation should have same subgroup
+6. Both Parent and Relation should have same category
+7. Commission Name should not be empty for Other commission
+8. Call the below function after Save . (If authorizedstatus = 0 then call the function)
+   FN_UWINDPOLICYPREMUIMDTL(IndividualPolicyCode);
+9. Call the below function once approve button is pressed
+   FN_UWINDPOLADDMEMBERPOLICYBK(IndividualPolicyCode);
+
+
+Add Member Policy :
+
+1. Call the below function after save
+   FN_UWADDMEMBERPOLICYPREMUIMDTL(PrimKey)
+2. Call the below function once approve button is pressed
+   FN_UWADDMEMBERPOLICY(PrimKey)
+
+Delete Member Policy :
+
+1. Call the below function after save
+   FN_DELCANCEL_PREMIUM(PrimKey)
+2. Call the below function once approve button is pressed
+   FN_DELCANCEL_APPROVAL(PrimKey)

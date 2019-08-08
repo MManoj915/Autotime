@@ -1,0 +1,7 @@
+﻿
+select * from  sys.user$ where name='CAPPS'; 
+
+update sys.user$ set name='CAPPS' where user#=104 and name='ADDVANTAGE_LIVE'; 
+
+
+ALTER USER CAPPS IDENTIFIED BY compass2015

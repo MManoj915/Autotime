@@ -1,0 +1,6 @@
+1. Claim Screen Print option in Excel 2015
+2. If the source is pbm show authorized claims
+3. Search by Member Name Option
+4. Fraud Remarks
+5. Prior Authorization Approved Date
+

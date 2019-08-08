@@ -1,0 +1,4 @@
+1. Make Default Claim Status into Pending in Claim Search Screen.
+2. When user click edit button in activity detail system should show that particular record but now it's showing blank.
+3. Lastmodified column showing primarykey instead of username
+4. When user click cancel or submit system going back to the parent menu. 

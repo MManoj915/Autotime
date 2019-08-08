@@ -1,0 +1,3416 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Web;
+using System.Web.Services;
+using Dapper; 
+using System.Configuration;
+using System.Web.Configuration;
+using System.Data.OleDb;
+using System.IO;
+using Oracle.DataAccess.Client;
+using System.Xml;
+using System.Text;
+using System.Net;
+using MimeKit;
+using MailKit.Net.Smtp;
+using System.Drawing;
+using ReaderService.ServiceReference1;
+using word = Microsoft.Office.Interop.Word;
+
+namespace ReaderService
+    {
+        /// <summary>
+        /// Summary description for WebService
+        /// </summary>
+        [WebService(Namespace = "http://tempuri.org/")]
+        [WebServiceBinding(ConformsTo = WsiProfiles.BasicProfile1_1)]
+        [System.ComponentModel.ToolboxItem(false)]
+        // To allow this Web Service to be called from script, using ASP.NET AJAX, uncomment the following line. 
+        // [System.Web.Script.Services.ScriptService]
+        public class WebService : System.Web.Services.WebService
+        {
+
+            private IDbConnection _db = new OracleConnection(ConfigurationSettings.AppSettings["connection"].ToString());
+            private IDbConnection _db1 = new OracleConnection(ConfigurationSettings.AppSettings["connection1"].ToString());
+            static string connStr = WebConfigurationManager.ConnectionStrings["connection"].ConnectionString;
+            static OracleConnection Conn;
+
+            [WebMethod]
+            public string ImportClientExcelFile(long PrimKey)
+            { 
+            //string FilePath = ConfigurationSettings.AppSettings["AddMemberFilePath"].ToString();
+            //ActiveList("D:\\7735-1 (1).xlsx");
+            /*string[] filePaths = Directory.GetFiles("C:\\APPS\\IM\\Data\\GroupPolicyFiles", "*.*", SearchOption.AllDirectories);
+            foreach(var str in filePaths)
+            {
+                try
+                {
+                    string FolderName = new DirectoryInfo(System.IO.Path.GetDirectoryName(str)).Name;
+                    string FileName = new FileInfo(str).Name;
+                    string Statuus = GroupPolicyMemberUploadList(str, FolderName);
+                }
+                catch(Exception e)
+                {
+                    string Statuus = e.Message;
+
+                }
+
+            }*/
+            //string Statuus = GroupPolicyMemberUploadList("C:\\App\\Nextcare.xlsx", "");
+                string FilePath = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\AddMemberUpload\";
+                List<AddMemberPolicy> AddNew = _db.Query<AddMemberPolicy>(" Select AddMemberPolicyCode,FileName,CreatedByName,PolicyCode,PolicyType from IM_CP_ADDMEMBERPOLICY Where ADDMEMBERPOLICYCODE = " + PrimKey).ToList();
+                FilePath = FilePath + PrimKey + "\\" + AddNew[0].FileName;
+                string Status = string.Empty;
+                try
+                {
+                    Status = ClientPortalExcelUpload(PrimKey, FilePath, AddNew[0].CreatedByName); 
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                    return Status;
+                }
+                if (Status == "E")
+                {
+                    _db.Execute("Delete From IM_EUT_ADD_CLIENT_PORTAL Where AddMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                }
+                
+                return Status;
+            }
+
+            [WebMethod]
+            public string UploadMemberApplicationExcelFile(long PolicyType, long PolicyCode, string FileName, string Guid, string CreatedBy)
+            { 
+            //string FilePath = ConfigurationSettings.AppSettings["RenewalExistingMemberFilePath"].ToString();
+            string FilePath = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\UploadMemberApplicationFile\";
+            string InsertQuery = "Insert into IM_PR_APPLICATION_UPLOAD Select (Select Nvl(Max(PrimKey),0)+1 from IM_PR_APPLICATION_UPLOAD)," + PolicyType + "," + PolicyCode + ",'" + Guid + "','" + FileName + "','" + CreatedBy + "' From Dual";
+            _db.Execute(InsertQuery);
+            List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_APPLICATION_UPLOAD Where Guid = '" + Guid + "'").ToList();
+            FilePath = FilePath + Guid + "\\" + AddNew[0].FileName;
+            string Status = string.Empty;
+            try
+            {
+                Status = MemberApplicationExcelUpload(AddNew[0].PrimKey, FilePath, AddNew[0].CreatedByName);
+                OracleConnection con = new OracleConnection(connStr);
+                OracleTransaction transaction = null;
+                string returnString = "";
+                string returnvalue = string.Empty;
+                try
+                {
+
+                    con.Open();
+
+                    OracleCommand cmd = new OracleCommand();
+                    transaction = con.BeginTransaction(IsolationLevel.ReadCommitted);
+                    cmd.CommandText = "NGI_PR_MEMAPP_ORAFNC";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Connection = con;
+                    OracleParameter retval = new OracleParameter("retval", OracleDbType.Varchar2, 1000);
+                    retval.Direction = ParameterDirection.ReturnValue;
+                    cmd.Parameters.Add(retval);
+                    cmd.Parameters.Add(new OracleParameter("P_PRIMKEY", OracleDbType.Int64, 30)).Value = AddNew[0].PrimKey;
+                    cmd.Parameters.Add(new OracleParameter("P_RESULT", OracleDbType.Int64, 30)).Direction = ParameterDirection.Output;
+                    cmd.ExecuteNonQuery();
+                    returnvalue = cmd.Parameters["P_RESULT"].Value.ToString();
+                    returnString = retval.Value.ToString();
+                    transaction.Commit();
+                    con.Close();
+                    if (returnvalue == "2")
+                    {
+                        Status = AddNew[0].PrimKey.ToString();
+                        return Status;
+                    }
+                    if (returnvalue == "1")
+                    { 
+                        Status = "S";
+                        return Status;
+                    }
+                }
+                catch (OracleException Ex)
+                {
+                    returnString = Ex.Message;
+                    if (transaction != null)
+                        transaction.Rollback();
+                    con.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Status = ex.Message;
+            }
+            if (Status == "E")
+            {
+                _db.Execute("Delete From IM_EUT_MEMAPP_CLIENT_PORTAL Where PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+            } 
+            else
+            {
+                try
+                {
+                    string Query = "INSERT INTO IM_PR_APPLICATION_ERRORLOG SELECT (Select Nvl(max(logcode),0)+1 from IM_PR_APPLICATION_ERRORLOG),1,'" + Status + "'," + AddNew[0].PrimKey + " FROM Dual";
+                    _db.Execute(Query);
+                }
+                catch (Exception ext)
+                {
+                    string Query = "INSERT INTO IM_PR_APPLICATION_ERRORLOG SELECT (Select Nvl(max(logcode),0)+1 from IM_PR_APPLICATION_ERRORLOG),1,'Error while Reading Excel File'," + AddNew[0].PrimKey + " FROM Dual";
+                    _db.Execute(Query);
+                }
+            }
+
+            return Status;
+        }
+
+
+            [WebMethod]
+            public string RenewalExistingMemberExcelFile(long PolicyType, long PolicyCode, string FileName, string Guid, string CreatedBy)
+            { 
+                //string FilePath = ConfigurationSettings.AppSettings["RenewalExistingMemberFilePath"].ToString();
+                string FilePath = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\UploadExistsPolicyFile\";
+                string InsertQuery = "Insert into IM_PR_RENEWAL_MEMBER Select (Select Nvl(Max(PrimKey),0)+1 from IM_PR_RENEWAL_MEMBER)," + PolicyType + "," + PolicyCode + ",'" + Guid + "','" + FileName + "','" + CreatedBy + "' From Dual";
+                _db.Execute(InsertQuery);
+                List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_RENEWAL_MEMBER Where Guid = '" + Guid + "'").ToList();
+                FilePath = FilePath + Guid + "\\" + AddNew[0].FileName;
+                string Status = string.Empty;
+                try
+                {
+                    Status = RenewalExistingMemberExcelUpload(AddNew[0].PrimKey, FilePath, AddNew[0].CreatedByName);
+                    OracleConnection con = new OracleConnection(connStr);
+                    OracleTransaction transaction = null;
+                    string returnString = "";
+                    string returnvalue = string.Empty;
+                    try
+                    {
+
+                        con.Open();
+
+                        OracleCommand cmd = new OracleCommand();
+                        transaction = con.BeginTransaction(IsolationLevel.ReadCommitted);
+                        cmd.CommandText = "NGI_PR_UPLOADEXIST_MEM_ORAFNC";
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Connection = con;
+                        OracleParameter retval = new OracleParameter("retval", OracleDbType.Varchar2, 1000);
+                        retval.Direction = ParameterDirection.ReturnValue;
+                        cmd.Parameters.Add(retval);
+                        cmd.Parameters.Add(new OracleParameter("P_PRIMKEY", OracleDbType.Int64, 30)).Value = AddNew[0].PrimKey; 
+                        cmd.Parameters.Add(new OracleParameter("P_RESULT", OracleDbType.Int64, 30)).Direction = ParameterDirection.Output;
+                        cmd.ExecuteNonQuery();
+                        returnvalue = cmd.Parameters["P_RESULT"].Value.ToString();
+                        returnString = retval.Value.ToString(); 
+                        transaction.Commit();
+                        con.Close();
+                        if (returnvalue == "2")
+                        {
+                            Status = AddNew[0].PrimKey.ToString();
+                            return Status;
+                        }
+                        if (returnvalue == "1")
+                        {
+                            string Query = "Update IM_Policy_Renewal Set UPLOADEXISTINGMEMBER = 1 Where TypeCode = " + PolicyType + " And PolicyCode = " + PolicyCode;
+                            _db.Execute(Query);
+                            Status = "S";
+                            return Status;
+                        }
+                }
+                    catch (OracleException Ex)
+                    {
+                        returnString = Ex.Message;
+                        if (transaction != null)
+                            transaction.Rollback();
+                        con.Close();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                }
+                if (Status == "E")
+                {
+                    _db.Execute("Delete From IM_PR_EUT_RENEWAL_UPLOAD Where PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                }
+                if(Status == "S")
+                {
+                    string Query = "Update IM_Policy_Renewal Set UPLOADEXISTINGMEMBER = 1 Where TypeCode = " + PolicyType + " And PolicyCode = " + PolicyCode;
+                    _db.Execute(Query);
+                }
+                else
+                {
+                    try
+                    {
+                        string Query = "INSERT INTO IM_PR_RENEWAL_ERRORLOG SELECT (Select Nvl(max(logcode),0)+1 from IM_PR_RENEWAL_ERRORLOG),1,'" + Status + "'," + AddNew[0].PrimKey + " FROM Dual";
+                        _db.Execute(Query);
+                    }
+                    catch (Exception ext)
+                    {
+                        string Query = "INSERT INTO IM_PR_RENEWAL_ERRORLOG SELECT (Select Nvl(max(logcode),0)+1 from IM_PR_RENEWAL_ERRORLOG),1,'Error while Reading Excel File'," + AddNew[0].PrimKey + " FROM Dual";
+                        _db.Execute(Query);
+                    }
+                }
+
+                return Status;
+            }
+
+            [WebMethod]
+            public string RenewalNewMemberExcelFile(long PolicyType, long PolicyCode, string FileName, string Guid, string CreatedBy)
+            {
+                //string FilePath = ConfigurationSettings.AppSettings["RenewalNewMemberFilePath"].ToString();
+                string FilePath = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\UploadNewPolicyFile\";
+                string InsertQuery = "Insert into IM_PR_RENEWAL_MEMBER Select (Select Nvl(Max(PrimKey),0)+1 from IM_PR_RENEWAL_MEMBER)," + PolicyType + "," + PolicyCode + ",'" + Guid + "','" + FileName + "','" + CreatedBy + "' From Dual";
+                _db.Execute(InsertQuery);
+                List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_RENEWAL_MEMBER Where Guid = '" + Guid + "'").ToList();
+                FilePath = FilePath + Guid + "\\" + AddNew[0].FileName;
+                string Status = string.Empty;
+                try
+                {
+                    Status = RenewalNewMemberExcelUpload(AddNew[0].PrimKey, FilePath, AddNew[0].CreatedByName);
+                    OracleConnection con = new OracleConnection(connStr);
+                    OracleTransaction transaction = null;
+                    string returnString = "";
+                    string returnvalue = string.Empty;
+                    try
+                    {
+
+                        con.Open();
+
+                        OracleCommand cmd = new OracleCommand();
+                        transaction = con.BeginTransaction(IsolationLevel.ReadCommitted);
+                        cmd.CommandText = "NGI_PR_UPLOADNEW_MEM_ORAFNC";
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Connection = con;
+                        OracleParameter retval = new OracleParameter("retval", OracleDbType.Varchar2, 1000);
+                        retval.Direction = ParameterDirection.ReturnValue;
+                        cmd.Parameters.Add(retval);
+                        cmd.Parameters.Add(new OracleParameter("P_PRIMKEY", OracleDbType.Int64, 30)).Value = AddNew[0].PrimKey;
+                        cmd.Parameters.Add(new OracleParameter("P_RESULT", OracleDbType.Int64, 30)).Direction = ParameterDirection.Output;
+                        cmd.ExecuteNonQuery();
+                        returnvalue = cmd.Parameters["P_RESULT"].Value.ToString();
+                        returnString = retval.Value.ToString();
+                        transaction.Commit();
+                        con.Close();
+                        if(returnvalue == "2")
+                        {
+                            Status = AddNew[0].PrimKey.ToString();
+                            return Status;
+                        }
+                        if (returnvalue == "1")
+                        {
+                            string Query = "Update IM_Policy_Renewal Set UPLOADNEWMEMBER = 1 Where  TypeCode = " + PolicyType + " And PolicyCode = " + PolicyCode;
+                            _db.Execute(Query);
+                            Status = "S";
+                            return Status;
+                        }
+                    }
+                    catch (OracleException Ex)
+                    {
+                        returnString = Ex.Message;
+                        if (transaction != null)
+                            transaction.Rollback();
+                        con.Close();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                }
+                if (Status == "E")
+                {
+                    _db.Execute("Delete From IM_EUT_RN_CLIENT_PORTAL Where RenewalCode = " + AddNew[0].PrimKey);
+                    Status = AddNew[0].PrimKey.ToString();
+                    return Status;
+                }
+                if (Status == "S")
+                {
+                    string Query = "Update IM_Policy_Renewal Set UPLOADNEWMEMBER = 1 Where TypeCode = " + PolicyType + " And PolicyCode = " + PolicyCode;
+                    _db.Execute(Query);
+                }
+                else
+                { 
+                    try
+                    {
+                        string Query = "INSERT INTO IM_PR_RENEWAL_ERRORLOG SELECT SELECT (Select Nvl(max(logcode),0)+1 from IM_PR_RENEWAL_ERRORLOG),1,'" + Status + "'," + AddNew[0].PrimKey + " FROM Dual";
+                        _db.Execute(Query);
+                    }
+                    catch (Exception ext)
+                    {
+                        string Query = "INSERT INTO IM_PR_RENEWAL_ERRORLOG SELECT SELECT (Select Nvl(max(logcode),0)+1 from IM_PR_RENEWAL_ERRORLOG),1,'Error while Reading Excel File'," + AddNew[0].PrimKey + " FROM Dual";
+                        _db.Execute(Query);
+                    }
+                    Status = AddNew[0].PrimKey.ToString();
+                    return Status;
+                }
+                return Status;
+            }
+
+            [WebMethod]
+            public string ImportBaseRateExcelFile(long PrimKey)
+        {
+            //string FilePath = ConfigurationSettings.AppSettings["BaseRateFilePath"].ToString();
+            string FilePath = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\PlanMasterUpload\";
+            List<PlanMaster> AddNew = _db.Query<PlanMaster>(" Select FileName from IM_PR_PLAN_MASTER Where PLANMASTERCODE = " + PrimKey).ToList();
+            FilePath = FilePath + PrimKey + "\\" + AddNew[0].FileName;
+            string Status = string.Empty;
+            try
+            {
+                Status = BaseRateExcelUpload(PrimKey, FilePath);
+            }
+            catch (Exception ex)
+            {
+                Status = ex.Message;
+                return Status;
+            }
+            if (Status == "S")
+            {
+                OracleConnection con = new OracleConnection(connStr);
+                OracleTransaction transaction = null;
+                string returnString = "";
+                string returnvalue = string.Empty;
+                try
+                {
+
+                    con.Open();
+
+                    OracleCommand cmd = new OracleCommand();
+                    transaction = con.BeginTransaction(IsolationLevel.ReadCommitted);
+                    cmd.CommandText = "PR_UPLOADBASERATE_FNC";
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Connection = con;
+                    OracleParameter retval = new OracleParameter("retval", OracleDbType.Varchar2, 1000);
+                    retval.Direction = ParameterDirection.ReturnValue;
+                    cmd.Parameters.Add(retval);
+                    cmd.Parameters.Add(new OracleParameter("P_PLANMASTERCODE", OracleDbType.Int64, 30)).Value = PrimKey;
+                    cmd.ExecuteNonQuery();
+                    returnString = retval.Value.ToString();
+                    transaction.Commit();
+                    con.Close();
+                    _db.Execute("Update IM_PR_PLAN_MASTER Set Authorizedstatus = 2 Where PLANMASTERCODE = " + PrimKey);
+                    return Status;
+                }
+                catch (OracleException Ex)
+                {
+                    returnString = Ex.Message;
+                    if (transaction != null)
+                        transaction.Rollback();
+                    con.Close();
+                }
+            }
+            if (Status == "E")
+            {
+                _db.Execute("Delete From IM_PR_EUT_BASERATES");
+            }
+            return "S";
+        }
+
+            [WebMethod]
+            public string RenewPolicy(long PolicyType, long PolicyCode, string CreatedByName)
+            {
+                int PolicyRenewalCount = Convert.ToInt32(_db.ExecuteScalar("Select Count(*) From IM_Policy_Renewal Where TypeCode = " + PolicyType + " and PolicyCode = " + PolicyCode));
+
+                string Status = string.Empty;
+                try
+                {
+                    var dynamicParams = new DynamicParameters();
+                    dynamicParams.Add("P_POLICYTYPE", value: PolicyType);
+                    dynamicParams.Add("P_POLICYCODE", value: PolicyCode);
+                    dynamicParams.Add("P_CREATEDBYNAME", value: CreatedByName);
+                    var data = _db.QueryMultiple("FN_PR_RENEWPOLICY", dynamicParams, commandType: CommandType.StoredProcedure);
+                    Status = "S";
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                }
+                return Status;
+            }
+
+            [WebMethod]
+            public string PostRenewPolicy(long PolicyType, long PolicyCode, string CreatedByName)
+            {
+
+                string Status = string.Empty;
+                string PolicyId = string.Empty;
+                string ReceiveMail = string.Empty;
+                string CCMail = string.Empty;
+                long UserCode = 0;
+                try
+                {
+                    if(PolicyType == 1)
+                    {
+                        PolicyId = _db.ExecuteScalar("Select PolicyID from Im_Policy Where PolicyCode = " + PolicyCode).ToString();
+                        ReceiveMail = _db.ExecuteScalar("SELECT Max(RECEIVEREMAIL)   FROM IM_PR_EMAIL_SETUP P " +
+                                        " JOIN HR_ORGANIZATIONS_D HR ON HR.SHORT_NAME = P.BRANCHNAME " +
+                                        " JOIN IM_POLICY POL ON POL.POLICYCODE = " + PolicyCode + "" +
+                                        " JOIN GENCONSTANT G ON G.CATEGORY = 'NGIQUOTATIONTYPE' AND G.CONSTANTNAME = P.MANAGEDBY " +
+                                        " AND Upper(G.LANGUAGECODE) = 'EN-US'  WHERE HR.ORGANIZATIONS_CODE = POL.BRANCHCODE " +
+                                        " AND G.CONSTANTVALUE = POL.OWNERCODE ").ToString();
+                        CCMail = _db.ExecuteScalar("SELECT Max(CCEMAIL)   FROM IM_PR_EMAIL_SETUP P " +
+                                        " JOIN HR_ORGANIZATIONS_D HR ON HR.SHORT_NAME = P.BRANCHNAME " +
+                                        " JOIN IM_POLICY POL ON POL.POLICYCODE = " + PolicyCode + "" +
+                                        " JOIN GENCONSTANT G ON G.CATEGORY = 'NGIQUOTATIONTYPE' AND G.CONSTANTNAME = P.MANAGEDBY " +
+                                        " AND Upper(G.LANGUAGECODE) = 'EN-US'  WHERE HR.ORGANIZATIONS_CODE = POL.BRANCHCODE " +
+                                        " AND G.CONSTANTVALUE = POL.OWNERCODE ").ToString();
+                    }
+                    if (PolicyType == 2)
+                    {
+                        PolicyId = _db.ExecuteScalar("Select PolicyID from Im_IndividualPolicy Where IndividualPolicyCode = " + PolicyCode).ToString();
+                        ReceiveMail = _db.ExecuteScalar("SELECT Max(RECEIVEREMAIL)   FROM IM_PR_EMAIL_SETUP P " +
+                                        " JOIN HR_ORGANIZATIONS_D HR ON HR.SHORT_NAME = P.BRANCHNAME " +
+                                        " JOIN IM_INDIVIDUALPOLICY POL ON POL.INDIVIDUALPOLICYCODE = " + PolicyCode + "" +
+                                        " JOIN GENCONSTANT G ON G.CATEGORY = 'NGIQUOTATIONTYPE' AND G.CONSTANTNAME = P.MANAGEDBY " +
+                                        " AND Upper(G.LANGUAGECODE) = 'EN-US'  WHERE HR.ORGANIZATIONS_CODE = POL.BRANCHCODE " +
+                                        " AND G.CONSTANTVALUE = POL.OWNERCODE ").ToString();
+                        CCMail = _db.ExecuteScalar("SELECT Max(CCEMAIL)   FROM IM_PR_EMAIL_SETUP P " +
+                                        " JOIN HR_ORGANIZATIONS_D HR ON HR.SHORT_NAME = P.BRANCHNAME " +
+                                        " JOIN IM_INDIVIDUALPOLICY POL ON POL.INDIVIDUALPOLICYCODE = " + PolicyCode + "" +
+                                        " JOIN GENCONSTANT G ON G.CATEGORY = 'NGIQUOTATIONTYPE' AND G.CONSTANTNAME = P.MANAGEDBY " +
+                                        " AND Upper(G.LANGUAGECODE) = 'EN-US'  WHERE HR.ORGANIZATIONS_CODE = POL.BRANCHCODE " +
+                                        " AND G.CONSTANTVALUE = POL.OWNERCODE ").ToString();
+                    }
+                    string Query = "Update IM_Policy_Renewal Set IsPosting = 1 Where TypeCode = " + PolicyType + " And PolicyCode = " + PolicyCode;
+                    _db.Execute(Query);
+                    UserCode = Convert.ToInt64(_db.ExecuteScalar("Select UserCode from IM_PR_USERS WHERE UPPER(UserID) = Upper('" + CreatedByName + "')").ToString());
+                    string InsertQuery = " INSERT INTO IM_PORTAL_NOTIFICATIONS  SELECT (SELECT Nvl(Max(PRIMKEY),0)+1 FROM IM_PORTAL_NOTIFICATIONS),'medicalportal@ngiuae.com','m123123*','" + ReceiveMail + "','" + CCMail + "', " +
+                                " 'Renewal Confirmation', " +
+                                " 'Dear Team <br/><br/> '||'" + CreatedByName + "' ||' sent  Renewal Confirmation for policy no - '||'" + PolicyId + "',0, " +
+                                " " + UserCode + ",SYSDATE,NULL FROM DUAL ";
+                    _db.Execute(InsertQuery);
+                    Status = "S";
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                }
+                return "S";
+            }
+
+            [WebMethod]
+            public string DownloadReports(long PrimaryKey, string FileName)
+            {
+                string FilePath = string.Empty;
+                
+                int DebitCount = Convert.ToInt16(_db.ExecuteScalar("Select Count(*) From IM_PolicyFinancePosting Where nvl(AddPremiumTotal,0) = 0 and PolicyFinancePostingCode = " + PrimaryKey));
+                int CreditCount = Convert.ToInt16(_db.ExecuteScalar("Select Count(*) From IM_PolicyFinancePosting Where nvl(DeletePremiumTotal,0) = 0 and PolicyFinancePostingCode = " + PrimaryKey));
+                if(DebitCount == 0)
+                {
+                    string ReportFileName = FileName +"_D.pdf";
+                    var dynamicParams = new DynamicParameters();
+                    dynamicParams.Add("P_PRIMKEY", value: PrimaryKey);
+                    dynamicParams.Add("P_FILENAME", value: FileName+"_D");
+                    var data = _db1.QueryMultiple("FMC_PR_REPORT_PRC", dynamicParams, commandType: CommandType.StoredProcedure);
+                    File.Copy(@"\\192.168.12.184\temp\" + ReportFileName, @"\\compass-web\PortalLive\InsuranceClientPortal\Invoice\" + ReportFileName);
+                    FilePath = ReportFileName + ",";
+                }
+                if (CreditCount == 0)
+                {
+                    string ReportFileName = FileName + "_C.pdf";
+                    var dynamicParams = new DynamicParameters();
+                    dynamicParams.Add("P_PRIMKEY", value: PrimaryKey);
+                    dynamicParams.Add("P_FILENAME", value: FileName + "_C");
+                    var data = _db1.QueryMultiple("FMC_PR_CR_REPORT_PRC", dynamicParams, commandType: CommandType.StoredProcedure);
+                    File.Copy(@"\\192.168.12.184\temp\" + ReportFileName, @"\\compass-web\PortalLive\InsuranceClientPortal\Invoice\" + ReportFileName);
+                    FilePath = FilePath + ReportFileName + ",";
+            }
+
+            //File.Copy(@"\\148.0.0.184\temp\" + FilePath, "D:\\Publish\\Portal\\InsuranceClientPortal\\Invoice\\" + FilePath);            
+                FilePath = FilePath.TrimEnd(',');
+                return FilePath;
+
+            }
+
+            [WebMethod]
+            public string CopyAddMemberPhotos(long PrimaryKey, long PortalPrimKey)
+            {
+                string Status = string.Empty;
+                string SourcePath = string.Empty;
+                string BillingNo = _db.ExecuteScalar("SELECT BILLINGNO FROM IM_ADDMEMBERPOLICY WHERE ADDMEMBERPOLICYCODE = " + PrimaryKey).ToString();
+                SourcePath = @"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\AddMemberPhotoUpload\" + PortalPrimKey;
+                string[] fileNames = Directory.GetFiles(SourcePath);
+                List<string> files = new List<string>();
+                foreach (string f in fileNames)
+                {
+                    System.IO.FileInfo fi = new System.IO.FileInfo(f);
+                    files.Add(fi.Name);
+                }
+                for (int i = 0; i < files.Count; i++)
+                {
+                    if (Directory.Exists(@"C:\APPS\IM\ATTACHMENTS\\AddMemberPhotos\" + BillingNo))
+                    {
+                        if (!File.Exists(@"C:\APPS\IM\ATTACHMENTS\\AddMemberPhotos\" + BillingNo + "\\" + files[i]))
+                        {
+                            File.Copy(@"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\AddMemberPhotoUpload\" + PortalPrimKey + "\\" + files[i], @"C:\APPS\IM\ATTACHMENTS\\AddMemberPhotos\" + BillingNo + "\\" + files[i]);
+                        }
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(@"C:\APPS\IM\ATTACHMENTS\\AddMemberPhotos\" + BillingNo);
+                        if (!File.Exists(@"C:\APPS\IM\ATTACHMENTS\\AddMemberPhotos\" + BillingNo + "\\" + files[i]))
+                        {
+                            File.Copy(@"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\AddMemberPhotoUpload\" + PortalPrimKey + "\\" + files[i], @"C:\APPS\IM\ATTACHMENTS\\AddMemberPhotos\" + BillingNo + "\\" + files[i]);
+                        }
+                    }
+                }
+                return "S";
+            }
+
+            [WebMethod]
+            public string CopyMemberAttachment(long PrimaryKey, long PortalPrimKey, long UploadType)
+            {
+                string SourcePath = string.Empty; 
+
+                if (UploadType == 1)
+                {
+                    SourcePath = @"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\AddMemberUpload\" + PortalPrimKey;
+                    string[] fileNames = Directory.GetFiles(SourcePath);
+                    List<string> files = new List<string>();
+                    foreach (string f in fileNames)
+                    {
+                        System.IO.FileInfo fi = new System.IO.FileInfo(f);
+                        files.Add(fi.Name);
+                    }
+                    for (int i = 0; i < files.Count; i++)
+                    {
+                        string InsertQuery = "INSERT INTO IM_ADDMEMBER_ATTACHMENT " +
+                                " SELECT(SELECT Nvl(Max(AMEMBERPOLICYATTACHMENTCODE),0)+1 FROM IM_ADDMEMBER_ATTACHMENT)," + PrimaryKey + ",'" + files[i] + "' FROM DUAL ";
+                        _db.Execute(InsertQuery);
+                        if (Directory.Exists(@"C:\APPS\IM\ATTACHMENTS\\ADDMEMBER_ATTACHMENT\" + PrimaryKey))
+                        {
+                            if (!File.Exists(@"C:\APPS\IM\ATTACHMENTS\\ADDMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]))
+                            {
+                                File.Copy(@"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\AddMemberUpload\" + PortalPrimKey + "\\" + files[i], @"C:\APPS\IM\ATTACHMENTS\\ADDMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]);
+                            }
+                        }
+                        else
+                        {
+                            Directory.CreateDirectory(@"C:\APPS\IM\ATTACHMENTS\\ADDMEMBER_ATTACHMENT\" + PrimaryKey);
+                            if (!File.Exists(@"C:\APPS\IM\ATTACHMENTS\\ADDMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]))
+                            {
+                                File.Copy(@"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\AddMemberUpload\" + PortalPrimKey + "\\" + files[i], @"C:\APPS\IM\ATTACHMENTS\\ADDMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]);
+                            }
+                        }
+                    }
+                }
+                if (UploadType == 2)
+                {
+                    SourcePath = @"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\DeleteMemberUpload\" + PortalPrimKey;
+                    string[] fileNames = Directory.GetFiles(SourcePath);
+                    List<string> files = new List<string>();
+                    foreach (string f in fileNames)
+                    {
+                        System.IO.FileInfo fi = new System.IO.FileInfo(f);
+                        files.Add(fi.Name);
+                    }
+                    for (int i = 0; i < files.Count; i++)
+                    {
+                        string InsertQuery = "INSERT INTO IM_DCMEMBER_ATTACHMENT " +
+                                " SELECT(SELECT Nvl(Max(DMEMBERPOLICYATTACHMENTCODE),0)+1 FROM IM_DCMEMBER_ATTACHMENT)," + PrimaryKey + ",'" + files[i] + "' FROM DUAL ";
+                        _db.Execute(InsertQuery);
+                        if (Directory.Exists(@"C:\APPS\IM\ATTACHMENTS\\DELMEMBER_ATTACHMENT\" + PrimaryKey))
+                        {
+                            if (!File.Exists(@"C:\APPS\IM\ATTACHMENTS\\DELMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]))
+                            {
+                                File.Copy(@"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\DeleteMemberUpload\" + PortalPrimKey + "\\" + files[i], @"C:\APPS\IM\ATTACHMENTS\\DELMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]);
+                            }
+                        }
+                        else
+                        {
+                            Directory.CreateDirectory(@"C:\APPS\IM\ATTACHMENTS\\DELMEMBER_ATTACHMENT\" + PrimaryKey);
+                            if (!File.Exists(@"C:\APPS\IM\ATTACHMENTS\\DELMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]))
+                            {
+                                File.Copy(@"\\COMPASS-WEB\PortalLive\InsuranceClientPortal\Content\DeleteMemberUpload\" + PortalPrimKey + "\\" + files[i], @"C:\APPS\IM\ATTACHMENTS\\DELMEMBER_ATTACHMENT\" + PrimaryKey + "\\" + files[i]);
+                            }
+                        }
+                    }
+                }
+                return "S";
+            }
+
+            [WebMethod]
+            public string CheckUIDValidation(string UIDNo,int Gender,string DateofBirth,string Nationality,string PassportNo,int Source)
+            {
+                //return "S";
+                string ValidationStatus = string.Empty; 
+                string ConnectionString = "DATA SOURCE=(DESCRIPTION =(ADDRESS =(PROTOCOL = TCP)(HOST = 192.168.11.4)(PORT = 1555))(CONNECT_DATA =(SERVER = DEDICATED)(SERVICE_NAME = prod)));PERSIST SECURITY INFO=True;USER ID=CAPPS;Password=COMPASS2015";
+                OracleConnection con = new OracleConnection(ConnectionString);
+                OracleCommand cmd = new OracleCommand();
+                cmd.CommandText = " SELECT  To_Char(to_date('" + DateofBirth + "','DD/MM/RRRR'),'RRRR-MM-DD') DOB FROM Dual";
+                cmd.Connection = con;
+                con.Open();
+                OracleDataReader dr = cmd.ExecuteReader();
+                string BirthDate = string.Empty;
+                if (dr.HasRows)
+                {
+                    while (dr.Read())
+                    {
+                        BirthDate = dr[0].ToString();
+                        
+
+                        StringBuilder builder = new StringBuilder();
+                        builder.Append("<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' xmlns:gbl='http://xmlns.oracle.com/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServicesBPEL'><soapenv:Header><wsse:Security xmlns:wsse='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'><wsse:UsernameToken><wsse:Username>PAYER_NATGENINS</wsse:Username><wsse:Password Type = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText'>D0hP5d3)Dx20!G(25</wsse:Password></wsse:UsernameToken></wsse:Security></soapenv:Header><soapenv:Body><gbl:PersonalProfileRequest><gbl:unifiedNumber>" + UIDNo + "</gbl:unifiedNumber><gbl:dateofBirth>" + BirthDate + "</gbl:dateofBirth><gbl:passportNumber>" + PassportNo + "</gbl:passportNumber></gbl:PersonalProfileRequest></soapenv:Body></soapenv:Envelope> ");
+
+                        HttpWebRequest request = CreateSOAPWebRequest();
+
+                        XmlDocument SOAPReqBody = new XmlDocument();
+                        SOAPReqBody.LoadXml(builder.ToString());
+                        using (Stream stream = request.GetRequestStream())
+                        {
+                            SOAPReqBody.Save(stream);
+                        }
+                        using (WebResponse Serviceres = request.GetResponse())
+                        {
+                            using (StreamReader rd = new StreamReader(Serviceres.GetResponseStream()))
+                            {
+                                //reading stream    
+                                var ServiceResult = rd.ReadToEnd();
+                                XmlDocument xmlDoc = new XmlDocument();
+                                xmlDoc.LoadXml(ServiceResult);
+                                XmlNamespaceManager xmlnsManager = new System.Xml.XmlNamespaceManager(xmlDoc.NameTable);
+
+                                xmlnsManager.AddNamespace("soap", "http://schemas.xmlsoap.org/soap/envelope/");
+                                xmlnsManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+                                xmlnsManager.AddNamespace("xsd", "http://www.w3.org/2001/XMLSchema");
+                                xmlnsManager.AddNamespace("si", "http://xmlns.oracle.com/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServicesBPEL");
+
+                                // You'd access the full path like this
+                                XmlNode UIDNoNode = xmlDoc.SelectSingleNode("/soap:Envelope/soap:Body/si:PersonalProfileResponse/si:PersonalProfile/si:unifiedNumber", xmlnsManager);
+                                if (UIDNoNode != null)
+                                {
+                                    if (UIDNoNode.InnerText != "-1")
+                                    {
+                                        ValidationStatus = "S";
+                                    }
+                                    else
+                                    { 
+                                        MemberRegistrationClient Cli = new MemberRegistrationClient();
+                                        ValidateMemberResponse Response = Cli.ValidateMemberUID("ngiuae", "ngi2012", Gender, DateofBirth, Nationality, PassportNo, Source);
+                                        string UIDValue = Response.UID;
+                                        if(UIDValue == UIDNo)
+                                        {
+                                            ValidationStatus = "S";
+                                        }
+                                        else
+                                        {
+                                            ValidationStatus = "UID not matching with DHA";
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    MemberRegistrationClient Cli = new MemberRegistrationClient();
+                                    ValidateMemberResponse Response = Cli.ValidateMemberUID("ngiuae", "ngi2012", Gender, DateofBirth, Nationality, PassportNo, Source);
+                                    string UIDValue = Response.UID;
+                                    if (UIDValue == UIDNo)
+                                    {
+                                        ValidationStatus = "S";
+                                    }
+                                    else
+                                    {
+                                        ValidationStatus = "UID not matching with DHA";
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                con.Close();
+                return ValidationStatus;
+            }
+
+            [WebMethod]
+            public string CheckEmiratesIDValidation(string EmiratesID, string DateofBirth, string PassportNo)
+            {
+                string ValidationStatus = string.Empty; 
+                string ConnectionString = "DATA SOURCE=(DESCRIPTION =(ADDRESS =(PROTOCOL = TCP)(HOST = 192.168.11.4)(PORT = 1555))(CONNECT_DATA =(SERVER = DEDICATED)(SERVICE_NAME = prod)));PERSIST SECURITY INFO=True;USER ID=CAPPS;Password=COMPASS2015";
+                OracleConnection con = new OracleConnection(ConnectionString);
+                OracleCommand cmd = new OracleCommand();
+                cmd.CommandText = " SELECT  To_Char(to_date('" + DateofBirth + "','DD/MM/RRRR'),'RRRR-MM-DD') DOB FROM Dual";
+                cmd.Connection = con;
+                con.Open();
+                OracleDataReader dr = cmd.ExecuteReader();
+                string BirthDate = string.Empty;
+                if (dr.HasRows)
+                {
+                    while (dr.Read())
+                    {
+                        BirthDate = dr[0].ToString();
+                         
+
+                        StringBuilder builder = new StringBuilder();
+                        builder.Append("<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' xmlns:gbl='http://xmlns.oracle.com/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServicesBPEL'><soapenv:Header><wsse:Security xmlns:wsse='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'><wsse:UsernameToken><wsse:Username>PAYER_NATGENINS</wsse:Username><wsse:Password Type = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText'>D0hP5d3)Dx20!G(25</wsse:Password></wsse:UsernameToken></wsse:Security></soapenv:Header><soapenv:Body><gbl:PersonalProfileRequest><gbl:identityCardNumber>" + EmiratesID + "</gbl:identityCardNumber><gbl:dateofBirth>" + BirthDate + "</gbl:dateofBirth><gbl:passportNumber>" + PassportNo + "</gbl:passportNumber></gbl:PersonalProfileRequest></soapenv:Body></soapenv:Envelope> ");
+
+                        HttpWebRequest request = CreateSOAPWebRequest();
+
+                        XmlDocument SOAPReqBody = new XmlDocument();
+                        SOAPReqBody.LoadXml(builder.ToString());
+                        using (Stream stream = request.GetRequestStream())
+                        {
+                            SOAPReqBody.Save(stream);
+                        }
+                        using (WebResponse Serviceres = request.GetResponse())
+                        {
+                            using (StreamReader rd = new StreamReader(Serviceres.GetResponseStream()))
+                            {
+                                //reading stream    
+                                var ServiceResult = rd.ReadToEnd();
+                                XmlDocument xmlDoc = new XmlDocument();
+                                xmlDoc.LoadXml(ServiceResult);
+                                XmlNamespaceManager xmlnsManager = new System.Xml.XmlNamespaceManager(xmlDoc.NameTable);
+
+                                xmlnsManager.AddNamespace("soap", "http://schemas.xmlsoap.org/soap/envelope/");
+                                xmlnsManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+                                xmlnsManager.AddNamespace("xsd", "http://www.w3.org/2001/XMLSchema");
+                                xmlnsManager.AddNamespace("si", "http://xmlns.oracle.com/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServicesBPEL");
+
+                                // You'd access the full path like this
+                                XmlNode UIDNoNode = xmlDoc.SelectSingleNode("/soap:Envelope/soap:Body/si:PersonalProfileResponse/si:PersonalProfile/si:unifiedNumber", xmlnsManager);
+                                if (UIDNoNode != null)
+                                {
+                                    if (UIDNoNode.InnerText != "-1")
+                                    {
+                                        ValidationStatus = "S";
+                                    }
+                                    else
+                                    {
+                                        ValidationStatus = "Emirates ID not matching with DHA";
+                                    }
+                                }
+                                else
+                                {
+                                    ValidationStatus = "Emirates ID not matching with DHA";
+                                }
+                            }
+                        }
+                    }
+                }
+                con.Close();
+                return ValidationStatus;
+            }
+
+            [WebMethod]
+            public string ForgotPasswordRequest(string UserName,string MobileNo,string EmailId)
+            {
+                string ValidationStatus = string.Empty; 
+                string ConnectionString = "DATA SOURCE=(DESCRIPTION =(ADDRESS =(PROTOCOL = TCP)(HOST = 192.168.11.4)(PORT = 1555))(CONNECT_DATA =(SERVER = DEDICATED)(SERVICE_NAME = prod)));PERSIST SECURITY INFO=True;USER ID=CAPPS;Password=COMPASS2015";
+                OracleConnection con = new OracleConnection(ConnectionString);
+                OracleCommand cmd = new OracleCommand();
+                cmd.CommandText = " SELECT  PASSWORD From IM_PR_USERS Where Upper(UserID) = Upper('" + UserName + "') And (Upper(EmailId) = Upper('" + EmailId + "') or MobileNo = '" + MobileNo + "')";
+                cmd.Connection = con;
+                con.Open();
+                OracleDataReader dr = cmd.ExecuteReader();
+                string BirthDate = string.Empty;
+                if (dr.HasRows)
+                {
+                    while (dr.Read())
+                    {
+                        try
+                        {
+                            var message = new MimeMessage();
+                            message.From.Add(new MailboxAddress("Medical Portal", "medicalportal@ngiuae.com"));
+                            message.To.Add(new MailboxAddress("Customer", EmailId));
+                            message.Subject = "Medical Portal Password";
+
+                            message.Body = new TextPart("html")
+                            {
+                                Text = "This is an automatic mail from the Medical Portal site. Please do not reply to this email.<br/><br/>Your Password has been reset to   " + dr["PASSWORD"].ToString() +"<br/><br/>Thank You"
+                            };
+
+                            using (var client = new SmtpClient())
+                            {
+                                client.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => {
+                                    return true;
+                                };
+                                client.Connect("148.0.0.67", 25);
+
+                                client.AuthenticationMechanisms.Remove("XOAUTH2");
+                                client.Send(message);
+                                client.Disconnect(true);
+                            }
+
+                    }
+                        catch
+                        {
+
+                        }
+                    }
+                }
+                else
+                {
+                    return "N";
+                }
+                return "S";
+            }
+
+            [WebMethod]
+            public string GenerateQuotationReport(long QuotationCode)
+            {
+                string ReportFileName = string.Empty;
+                ReportFileName = GenerateWordDocument(QuotationCode);
+                return ReportFileName;
+            }
+
+            [WebMethod]
+            public string DeleteMemberBulkUpload(long PrimKey)
+            {
+                string FilePath = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\DeleteBulkMemberUpload\";
+                List<AddMemberPolicy> AddNew = _db.Query<AddMemberPolicy>(" SELECT DELMEMBERPOLICYCODE ADDMEMBERPOLICYCODE,DOCUMENTNAME FILENAME,CREATEDBYNAME,POLICYCODE,POLICYTYPE FROM IM_CP_DELMEMBERPOLICY Where DELMEMBERPOLICYCODE = " + PrimKey).ToList();
+                FilePath = FilePath + PrimKey + "\\" + AddNew[0].FileName;
+                string Status = string.Empty;
+                try
+                {
+                    Status = ClientPortalDeleteExcelUpload(PrimKey, FilePath, AddNew[0].CreatedByName);
+                    if(Status == "S")
+                    {
+                    /*var dynamicParams = new DynamicParameters();
+                    dynamicParams.Add("P_DELMEMBERPOLICYCODE", value: PrimKey); 
+                    var data = _db.QueryMultiple("FN_PR_CHECKDELMEMBER", dynamicParams, commandType: CommandType.StoredProcedure);
+                    int Count = Convert.ToInt16(_db.ExecuteScalar("Select Count(*) From IM_CP_DELETEERRORLOG Where DELMEMBERPOLICYCODE = " + PrimKey).ToString());
+                    if(Count == 0)
+                    {
+                       string InsertQry = "Insert Into  IM_CP_DELMEMBERPOLICYDTL SELECT(SELECT Max(DELEMEMBERPOLICYDTLCODE) + 1 FROM  IM_CP_DELMEMBERPOLICYDTL),DELMEMBERPOLICYCODE,M.MEMBERPOLICYCODE, " +
+                       " To_Date(A.EFFECTIVEDATE, 'DD/MM/RRRR') EFFECTIVEDATE " +
+                       " FROM IM_EUT_DEL_CLIENT_PORTAL A, IM_MEMBERPOLICY M WHERE DELMEMBERPOLICYCODE = " + PrimKey + " " +
+                       " AND (Upper(ACARDID) = Upper(HDR.CARDNO) OR REPLACE(A_EMIRATES_ID,'-','') = REPLACE(HDR.EMIRATESID,'-','')) ";
+                       _db.Execute(InsertQry);
+                    }
+                    else
+                    {
+                        Status = "EC";
+                        return Status;
+                    }*/
+                    string InsertQry = "Insert Into  IM_CP_DELMEMBERPOLICYDTL SELECT(SELECT Max(DELEMEMBERPOLICYDTLCODE) + 1 FROM  IM_CP_DELMEMBERPOLICYDTL),DELMEMBERPOLICYCODE,M.MEMBERPOLICYCODE, " +
+                       " To_Date(A.EFFECTIVEDATE, 'DD/MM/RRRR') EFFECTIVEDATE " +
+                       " FROM IM_EUT_DEL_CLIENT_PORTAL A, IM_MEMBERPOLICY M WHERE DELMEMBERPOLICYCODE = " + PrimKey + " " +
+                       " AND (Upper(ACARDID) = Upper(HDR.CARDNO) OR REPLACE(A_EMIRATES_ID,'-','') = REPLACE(HDR.EMIRATESID,'-','')) ";
+                    _db.Execute(InsertQry);
+                    Status = "S";
+                        return Status;
+                    }
+                   
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                    return Status;
+                }
+                if (Status == "E")
+                {
+                    _db.Execute("Delete From IM_EUT_DEL_CLIENT_PORTAL Where DelMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                }
+
+                return Status;
+            }
+
+            [WebMethod]
+            public string DeleteMemberBulkUpload1(string FilePath)
+            {
+                 
+                string Status = string.Empty;
+                try
+                {
+                    Status = ClientPortalDeleteExcelUpload1(FilePath);
+                     
+                }
+                catch (Exception ex)
+                {
+                    Status = ex.Message;
+                    return Status;
+                }
+                if (Status == "E")
+                {
+
+            }
+
+                return Status;
+            }
+
+
+            public string CheckEmiratesIDExcelFile(string EmiratesID, string DateofBirth, string PassportNo)
+            {
+                string ValidationStatus = string.Empty; 
+                string ConnectionString = "DATA SOURCE=(DESCRIPTION =(ADDRESS =(PROTOCOL = TCP)(HOST = 192.168.11.4)(PORT = 1555))(CONNECT_DATA =(SERVER = DEDICATED)(SERVICE_NAME = prod)));PERSIST SECURITY INFO=True;USER ID=CAPPS;Password=COMPASS2015";
+                OracleConnection con = new OracleConnection(ConnectionString);
+                OracleCommand cmd = new OracleCommand();
+                cmd.CommandText = " SELECT  To_Char(to_date('" + DateofBirth + "','DD/MM/RRRR'),'RRRR-MM-DD') DOB FROM Dual";
+                cmd.Connection = con;
+                con.Open();
+                OracleDataReader dr = cmd.ExecuteReader();
+                string BirthDate = string.Empty;
+                if (dr.HasRows)
+                {
+                    while (dr.Read())
+                    {
+                        BirthDate = dr[0].ToString();
+
+
+                        StringBuilder builder = new StringBuilder();
+                        builder.Append("<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' xmlns:gbl='http://xmlns.oracle.com/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServicesBPEL'><soapenv:Header><wsse:Security xmlns:wsse='http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd'><wsse:UsernameToken><wsse:Username>PAYER_NATGENINS</wsse:Username><wsse:Password Type = 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText'>D0hP5d3)Dx20!G(25</wsse:Password></wsse:UsernameToken></wsse:Security></soapenv:Header><soapenv:Body><gbl:PersonalProfileRequest><gbl:identityCardNumber>" + EmiratesID + "</gbl:identityCardNumber><gbl:dateofBirth>" + BirthDate + "</gbl:dateofBirth><gbl:passportNumber>" + PassportNo + "</gbl:passportNumber></gbl:PersonalProfileRequest></soapenv:Body></soapenv:Envelope> ");
+
+                        HttpWebRequest request = CreateSOAPWebRequest();
+
+                        XmlDocument SOAPReqBody = new XmlDocument();
+                        SOAPReqBody.LoadXml(builder.ToString());
+                        using (Stream stream = request.GetRequestStream())
+                        {
+                            SOAPReqBody.Save(stream);
+                        }
+                        using (WebResponse Serviceres = request.GetResponse())
+                        {
+                            using (StreamReader rd = new StreamReader(Serviceres.GetResponseStream()))
+                            {
+                                //reading stream    
+                                var ServiceResult = rd.ReadToEnd();
+                                XmlDocument xmlDoc = new XmlDocument();
+                                xmlDoc.LoadXml(ServiceResult);
+                                XmlNamespaceManager xmlnsManager = new System.Xml.XmlNamespaceManager(xmlDoc.NameTable);
+
+                                xmlnsManager.AddNamespace("soap", "http://schemas.xmlsoap.org/soap/envelope/");
+                                xmlnsManager.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+                                xmlnsManager.AddNamespace("xsd", "http://www.w3.org/2001/XMLSchema");
+                                xmlnsManager.AddNamespace("si", "http://xmlns.oracle.com/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServices/GBL_HAAD_MOI_DigitalDocServicesBPEL");
+
+                                // You'd access the full path like this
+                                XmlNode UIDNoNode = xmlDoc.SelectSingleNode("/soap:Envelope/soap:Body/si:PersonalProfileResponse/si:PersonalProfile/si:unifiedNumber", xmlnsManager);
+                                if (UIDNoNode != null)
+                                {
+                                    if (UIDNoNode.InnerText != "-1")
+                                    {
+                                        ValidationStatus = "S";
+                                    }
+                                    else
+                                    {
+                                        ValidationStatus = "UID not matching with DHA";
+                                    }
+                                }
+                                else
+                                {
+                                    ValidationStatus = "UID not matching with DHA";
+                                }
+                            }
+                        }
+                    }
+                }
+                con.Close();
+                return ValidationStatus;
+            }
+
+
+            public HttpWebRequest CreateSOAPWebRequest()
+            {
+                //Making Web Request    
+                HttpWebRequest Req = (HttpWebRequest)WebRequest.Create(@"https://ieprod.doh.gov.ae/HAADInt/G2B/PersonalProfile");
+                //SOAPAction    
+                Req.Headers.Add(@"SOAPAction:PersonalProfileDetails");
+                //Content_type    
+                Req.ContentType = "text/xml;charset=\"utf-8\"";
+                Req.Accept = "text/xml";
+                //HTTP method    
+                Req.Method = "POST";
+                //return HttpWebRequest    
+                return Req;
+            }
+
+            public string ClientPortalExcelUpload(long Primary, string FilePath, string CreatedBy)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+                List<AddMemberPolicy> AddNew = _db.Query<AddMemberPolicy>(" Select AddMemberPolicyCode,FileName,CreatedByName,PolicyCode,PolicyType from IM_CP_ADDMEMBERPOLICY Where ADDMEMBERPOLICYCODE = " + Primary).ToList();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath); 
+                    int ErrorCount = 0;
+                    List<string> MasterColumnHeader = new List<string>() { "SNO", "POLICYID", "MEMBER_REF_NO", "PARENT_ID", "SUB_GROUP", "CATEGORY", "INCEPTION_DATE", "DATE_OF_ENTRY", "MEMBER_NAME", "SECONDNAME", "FAMILYNAME", "RELATION", "GENDER", "DATE_OF_BIRTH", "MARITAL_STATUS", "OCCUPATION", "NATIONALITY", "ADDRESS1", "ADDRESS2", "PHONE_NO", "MOBILE_NO", "EMAIL_ID", "PASSPORT_NO", "LOCATION", "RESIDENTIALLOCATION", "WORKLOCATION", "SALARYBAND", "EMIRATES_ID", "UIDNUMBER", "STAFF_ID", "ENTRY_TYPE", "ISCOMMISSION", "ENTITYTYPE", "ENTITYID", "CONTACTNUMBER", "COMPANYEMAIL" };
+                    for (int i = 0; i < MasterColumnHeader.Count(); i++)
+                    {
+                        int ExcelRow = i + 1;
+                        if (ExDataTable.Columns[i].ColumnName == MasterColumnHeader[i])
+                            continue;
+                        else
+                        {
+                            ErrorCount++;
+                        //long PrimKey = Convert.ToInt64(_db.ExecuteScalar("Select IM_PR_RENEWAL_SEQ_1.NEXTVAL FROM DUAL").ToString());
+                        string ErrorQuery = " INSERT INTO IM_CP_UPLOADERRORLOG  (LOGCODE,SNO,DESCRIPTION,ADDMEMBERPOLICYCODE) " +
+                                " VALUES ((SELECT Nvl(MAX(LOGCODE),0)+1 FROM IM_CP_UPLOADERRORLOG)," + ExcelRow + ",'Column " + ExcelRow + " should be '" + MasterColumnHeader[i] + "'.. Please check the format'," + Primary + ") ";
+                            _db.Execute(ErrorQuery);
+                        }
+                    }
+                    if (ErrorCount > 0)
+                    {
+                        return "E";
+                    }
+                    int Reccnt = 0;
+                    
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_EUT_ADD_CLIENT_PORTAL");
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                        //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+
+                    //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        long RowError = 0;
+
+                        for (int NCnt = 0; NCnt < ColNames.Count()-4; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+                        }
+
+                        if (RowError > 0)
+                        {
+                        }
+                    }
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_EUT_ADD_CLIENT_PORTAL " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count()-4; NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+                        InsetSql += "'" + AddNew[0].CreatedByName + "'," + AddNew[0].PolicyCode + "," + AddNew[0].PolicyType + "," + AddNew[0].AddMemberPolicyCode + "";
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                        try
+                        {
+                            _db.Execute("Delete From IM_EUT_ADD_CLIENT_PORTAL Where AddMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                        }
+                        catch (Exception E)
+                        {
+                        }
+
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            StatusMessage = "S";
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_EUT_ADD_CLIENT_PORTAL Where AddMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+
+            public string ClientPortalDeleteExcelUpload(long Primary, string FilePath, string CreatedBy)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+                List<AddMemberPolicy> AddNew = _db.Query<AddMemberPolicy>(" SELECT DELMEMBERPOLICYCODE ADDMEMBERPOLICYCODE,DOCUMENTNAME FILENAME,CREATEDBYNAME,POLICYCODE,POLICYTYPE FROM IM_CP_DELMEMBERPOLICY Where DELMEMBERPOLICYCODE = " + Primary).ToList();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath);
+                    /*int ErrorCount = 0;
+                    List<string> MasterColumnHeader = new List<string>() { "SNO", "POLICYID", "MEMBER_REF_NO", "PARENT_ID", "SUB_GROUP", "CATEGORY", "INCEPTION_DATE", "DATE_OF_ENTRY", "MEMBER_NAME", "SECONDNAME", "FAMILYNAME", "RELATION", "GENDER", "DATE_OF_BIRTH", "MARITAL_STATUS", "OCCUPATION", "NATIONALITY", "ADDRESS1", "ADDRESS2", "PHONE_NO", "MOBILE_NO", "EMAIL_ID", "PASSPORT_NO", "LOCATION", "RESIDENTIALLOCATION", "WORKLOCATION", "SALARYBAND", "EMIRATES_ID", "UIDNUMBER", "STAFF_ID", "ENTRY_TYPE", "ISCOMMISSION", "ENTITYTYPE", "ENTITYID", "CONTACTNUMBER", "COMPANYEMAIL" };
+                    for (int i = 0; i < MasterColumnHeader.Count(); i++)
+                    {
+                        int ExcelRow = i + 1;
+                        if (ExDataTable.Columns[i].ColumnName == MasterColumnHeader[i])
+                            continue;
+                        else
+                        {
+                            ErrorCount++;
+                            //long PrimKey = Convert.ToInt64(_db.ExecuteScalar("Select IM_PR_RENEWAL_SEQ_1.NEXTVAL FROM DUAL").ToString());
+                            string ErrorQuery = " INSERT INTO IM_CP_UPLOADERRORLOG  (LOGCODE,SNO,DESCRIPTION,ADDMEMBERPOLICYCODE) " +
+                                    " VALUES ((SELECT Nvl(MAX(LOGCODE),0)+1 FROM IM_CP_UPLOADERRORLOG)," + ExcelRow + ",'Column " + ExcelRow + " should be '" + MasterColumnHeader[i] + "'.. Please check the format'," + Primary + ") ";
+                            _db.Execute(ErrorQuery);
+                        }
+                    }
+                    if (ErrorCount > 0)
+                    {
+                        return "E";
+                    }*/
+                    int Reccnt = 0;
+
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_EUT_DEL_CLIENT_PORTAL");
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                     //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+
+                    //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        long RowError = 0;
+
+                        for (int NCnt = 0; NCnt < ColNames.Count() - 1; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+                        }
+
+                        if (RowError > 0)
+                        {
+                        }
+                    }
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_EUT_DEL_CLIENT_PORTAL " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count() - 1; NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+                            InsetSql += "" + AddNew[0].AddMemberPolicyCode + "";
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                        try
+                        {
+                            _db.Execute("Delete From IM_EUT_DEL_CLIENT_PORTAL Where DelMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                        }
+                        catch (Exception E)
+                        {
+                        }
+
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            StatusMessage = "S";
+                            return StatusMessage;
+
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_EUT_DEL_CLIENT_PORTAL Where DelMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+
+        public string ClientPortalDeleteExcelUpload1(string FilePath)
+        {
+            string StatusMessage = string.Empty;
+
+            List<string> SQLs = new List<string>();
+            
+            if (!File.Exists(FilePath))
+                StatusMessage = "File not found !";
+            else
+            {
+                List<string> Sqls = new List<string>();
+
+                System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath);
+                 
+                int Reccnt = 0;
+
+                System.Data.DataRow ColRowView = null;
+                System.Data.DataRow DataRowView = null;
+
+                if (ExDataTable.Rows.Count > 0)
+                {
+                    ColRowView = ExDataTable.Rows[0];
+                }
+
+                if (ExDataTable.DefaultView.Count > 1)
+                {
+                    DataRowView = ExDataTable.Rows[1];
+                }
+                else
+                    DataRowView = ColRowView;
+
+                string StrColumns = string.Empty;
+
+                List<string> Columns = new List<string>();
+
+                List<int> ColumnsLength = new List<int>();
+
+                List<Type> ColumnsType = new List<Type>();
+
+                List<string> ColNames = GetColumnNames("IM_EUT_DEL_CLIENT_PORTAL");
+
+                for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                {
+                    string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                 //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                    StrColumns += (ColumnName + ",");
+
+                    Columns.Add(ColumnName);
+
+                    ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                    //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                }
+
+                //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                long ExcelErrorCount = 0;
+                List<string> ErrorList = new List<string>();
+                foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                {
+                    Reccnt++;
+                    //if (Reccnt == 1) continue;
+                    long RowError = 0;
+
+                    for (int NCnt = 0; NCnt < ColNames.Count() - 1; NCnt++)
+                    {
+                        string ColumnData = Row[NCnt].ToString();
+                    }
+
+                    if (RowError > 0)
+                    {
+                    }
+                }
+
+                if (ExcelErrorCount == 0)
+                {
+                    Reccnt = 0;
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+
+                        string InsertData = string.Empty;
+
+                        string InsetSql = "Insert Into IM_EUT_DEL_CLIENT_PORTAL " + StrColumns + " Values(";
+
+                        for (int NCnt = 0; NCnt < ColNames.Count() - 1; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+
+                            InsertData += ColumnData;
+
+                            if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                            if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(string))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(DateTime))
+                            {
+                                //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                            }
+                            else
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                        }
+
+                        InsetSql += "1";
+                        InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                        if (!string.IsNullOrEmpty(InsertData.Trim()))
+                            SQLs.Add(InsetSql);
+
+                        Reccnt++;
+                    }
+
+                    try
+                    {
+                        //_db.Execute("Delete From IM_EUT_DEL_CLIENT_PORTAL Where DelMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                    }
+                    catch (Exception E)
+                    {
+                    }
+
+                    try
+                    {
+                        foreach (string str in SQLs)
+                        {
+                            _db.Execute(str);
+                        }
+                        StatusMessage = "S";
+                    }
+                    catch (Exception E)
+                    {
+                        //_db.Execute("Delete From IM_EUT_DEL_CLIENT_PORTAL Where DelMemberPolicyCode = " + AddNew[0].AddMemberPolicyCode);
+                        StatusMessage = "E";
+                    }
+                }
+
+            }
+            return StatusMessage;
+        }
+
+        public string ClientPortalExcelUpload1(long Primary, string FilePath, string CreatedBy)
+        {
+            string StatusMessage = string.Empty;
+
+            List<string> SQLs = new List<string>();
+            List<AddMemberPolicy> AddNew = _db.Query<AddMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType from IM_CP_ADDMEMBERPOLICY Where ADDMEMBERPOLICYCODE = " + Primary).ToList();
+
+            if (!File.Exists(FilePath))
+                StatusMessage = "File not found !";
+            else
+            {
+                List<string> Sqls = new List<string>();
+
+                System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath);
+
+                int Reccnt = 0;
+
+                System.Data.DataRow ColRowView = null;
+                System.Data.DataRow DataRowView = null;
+
+                if (ExDataTable.Rows.Count > 0)
+                {
+                    ColRowView = ExDataTable.Rows[0];
+                }
+
+                if (ExDataTable.DefaultView.Count > 1)
+                {
+                    DataRowView = ExDataTable.Rows[1];
+                }
+                else
+                    DataRowView = ColRowView;
+
+                string StrColumns = string.Empty;
+
+                List<string> Columns = new List<string>();
+
+                List<int> ColumnsLength = new List<int>();
+
+                List<Type> ColumnsType = new List<Type>();
+
+                List<string> ColNames = GetColumnNames("IM_EUT_CLIENT_PORTAL");
+
+                for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                {
+                    string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                 //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                    StrColumns += (ColumnName + ",");
+
+                    Columns.Add(ColumnName);
+
+                    ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                    //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                }
+
+                //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                long ExcelErrorCount = 0;
+                List<string> ErrorList = new List<string>();
+                foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                {
+                    Reccnt++;
+                    //if (Reccnt == 1) continue;
+                    long RowError = 0;
+
+                    for (int NCnt = 0; NCnt < ColNames.Count() - 3; NCnt++)
+                    {
+                        string ColumnData = Row[NCnt].ToString();
+                    }
+
+                    if (RowError > 0)
+                    {
+                    }
+                }
+
+                if (ExcelErrorCount == 0)
+                {
+                    Reccnt = 0;
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+
+                        string InsertData = string.Empty;
+
+                        string InsetSql = "Insert Into IM_EUT_CLIENT_PORTAL " + StrColumns + " Values(";
+
+                        for (int NCnt = 0; NCnt < ColNames.Count() - 3; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+
+                            InsertData += ColumnData;
+
+                            if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                            if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(string))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(DateTime))
+                            {
+                                //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                            }
+                            else
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                        }
+
+                        InsetSql += "'" + AddNew[0].CreatedByName + "'," + AddNew[0].PolicyCode + "," + AddNew[0].PolicyType + "";
+                        InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                        if (!string.IsNullOrEmpty(InsertData.Trim()))
+                            SQLs.Add(InsetSql);
+
+                        Reccnt++;
+                    }
+
+                    try
+                    {
+                        _db.Execute("Delete From IM_EUT_CLIENT_PORTAL Where PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                    }
+                    catch (Exception E)
+                    {
+                    }
+
+                    try
+                    {
+                        foreach (string str in SQLs)
+                        {
+                            _db.Execute(str);
+                        }
+                        StatusMessage = "S";
+                    }
+                    catch (Exception E)
+                    {
+                        _db.Execute("Delete From IM_EUT_CLIENT_PORTAL Where PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                        StatusMessage = "E";
+                    }
+                }
+
+            }
+            return StatusMessage;
+        }
+
+            public string RenewalExistingMemberExcelUpload(long Primary, string FilePath, string CreatedBy)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+                List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_RENEWAL_MEMBER Where PrimKey = " + Primary + "").ToList();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath);
+                    int ErrorCount = 0;
+                    List<string> MasterColumnHeader = new List<string>() { "SNO", "CARDID", "MEMBERID", "PARENTID", "MEMBERNAME", "GENDERNAME", "DATE_OF_BIRTH", "AGE", "MEMBERRELATIONNAME", "MARITALSTATUSNAME", "NATIONALITY", "EMIRATESID", "MEMBER_UID", "PASSPORT_NO", "MOBILE_NO", "EMAIL_ID", "A_STAFF_ID", "CATEGORY_NAME", "GROUP_NAME", "MEMBERSTATUS", "INCEPTIONDATE", "MEMBERENDDATE", "LOCATIONNAME", "WORKLOCATION", "RESIDENTLOCATION", "SALARYBAND", "ENTITYTYPE", "MEMBERENTITYIDNAME", "ADDRESS1", "ADDRESS2" };
+                    for (int i = 0; i < MasterColumnHeader.Count(); i++)
+                    {
+                        int ExcelRow = i + 1;
+                        if (ExDataTable.Columns[i].ColumnName == MasterColumnHeader[i])
+                            continue;
+                        else
+                        {
+                            ErrorCount++;
+                            long PrimKey = Convert.ToInt64(_db.ExecuteScalar("Select IM_PR_RENEWAL_SEQ_1.NEXTVAL FROM DUAL").ToString());
+                            _db.Execute("Insert Into IM_PR_Renewal_ErrorLog Select " + PrimKey + "," + ExcelRow + ",'Column "+ ExcelRow + " should be '"+ MasterColumnHeader[i] + "'.. Please check the format'," + Primary + " From Dual");
+                        }  
+                    }
+                    if(ErrorCount > 0)
+                    {
+                        return "E";
+                    }
+                    int Reccnt = 0;
+
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_PR_EUT_RENEWAL_UPLOAD");
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                        //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+
+                    //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        long RowError = 0;
+
+                        for (int NCnt = 0; NCnt < ColNames.Count()-3; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+                        }
+
+                        if (RowError > 0)
+                        {
+                        }
+                    }
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_PR_EUT_RENEWAL_UPLOAD " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count()-3; NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+                            InsetSql += "'" + AddNew[0].CreatedByName + "'," + AddNew[0].PolicyCode + "," + AddNew[0].PolicyType + "";
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                        try
+                        {
+                            _db.Execute("Delete From IM_PR_EUT_RENEWAL_UPLOAD Where  PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                        }
+                        catch (Exception E)
+                        {
+                        }
+
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            StatusMessage = "S";
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_PR_EUT_RENEWAL_UPLOAD Where  PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+
+            public string RenewalExistingMemberExcelUpload1(long Primary, string FilePath )
+        {
+            string StatusMessage = string.Empty;
+
+            List<string> SQLs = new List<string>();
+            List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_RENEWAL_MEMBER Where PrimKey = " + Primary + "").ToList();
+
+            if (!File.Exists(FilePath))
+                StatusMessage = "File not found !";
+            else
+            {
+                List<string> Sqls = new List<string>();
+
+                System.Data.DataTable ExDataTable = ConvertXSLXtoDataTable(FilePath);
+
+                int Reccnt = 0;
+
+                System.Data.DataRow ColRowView = null;
+                System.Data.DataRow DataRowView = null;
+
+                if (ExDataTable.Rows.Count > 0)
+                {
+                    ColRowView = ExDataTable.Rows[0];
+                }
+
+                if (ExDataTable.DefaultView.Count > 1)
+                {
+                    DataRowView = ExDataTable.Rows[1];
+                }
+                else
+                    DataRowView = ColRowView;
+
+                string StrColumns = string.Empty;
+
+                List<string> Columns = new List<string>();
+
+                List<int> ColumnsLength = new List<int>();
+
+                List<Type> ColumnsType = new List<Type>();
+
+                List<string> ColNames = GetColumnNames("IM_PR_EUT_RENEWAL_UPLOAD");
+
+                for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                {
+                    string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                 //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                    StrColumns += (ColumnName + ",");
+
+                    Columns.Add(ColumnName);
+
+                    ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                    //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                }
+
+                //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                long ExcelErrorCount = 0;
+                List<string> ErrorList = new List<string>();
+                foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                {
+                    Reccnt++;
+                    //if (Reccnt == 1) continue;
+                    long RowError = 0;
+
+                    for (int NCnt = 0; NCnt < ColNames.Count() - 3; NCnt++)
+                    {
+                        string ColumnData = Row[NCnt].ToString();
+                    }
+
+                    if (RowError > 0)
+                    {
+                    }
+                }
+
+                if (ExcelErrorCount == 0)
+                {
+                    Reccnt = 0;
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+
+                        string InsertData = string.Empty;
+
+                        string InsetSql = "Insert Into IM_PR_EUT_RENEWAL_UPLOAD " + StrColumns + " Values(";
+
+                        for (int NCnt = 0; NCnt < ColNames.Count() - 3; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+
+                            InsertData += ColumnData;
+
+                            if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                            if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(string))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(DateTime))
+                            {
+                                //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                            }
+                            else
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                        }
+
+                        InsetSql += "'" + AddNew[0].CreatedByName + "'," + AddNew[0].PolicyCode + "," + AddNew[0].PolicyType + "";
+                        InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                        if (!string.IsNullOrEmpty(InsertData.Trim()))
+                            SQLs.Add(InsetSql);
+
+                        Reccnt++;
+                    }
+
+                    try
+                    {
+                        _db.Execute("Delete From IM_PR_EUT_RENEWAL_UPLOAD Where  PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                    }
+                    catch (Exception E)
+                    {
+                    }
+
+                    try
+                    {
+                        foreach (string str in SQLs)
+                        {
+                            _db.Execute(str);
+                        }
+                        StatusMessage = "S";
+                    }
+                    catch (Exception E)
+                    {
+                        _db.Execute("Delete From IM_PR_EUT_RENEWAL_UPLOAD Where  PolicyType = " + AddNew[0].PolicyType + " And PolicyCode = " + AddNew[0].PolicyCode + " and CreatedByName = '" + AddNew[0].CreatedByName + "'");
+                        StatusMessage = "E";
+                    }
+                }
+
+            }
+            return StatusMessage;
+        }
+
+            public string RenewalNewMemberExcelUpload(long Primary, string FilePath, string CreatedBy)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+                List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_RENEWAL_MEMBER Where PrimKey = " + Primary + "").ToList();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath);
+
+                    int ErrorCount = 0;
+                    List<string> MasterColumnHeader = new List<string>() { "SNO", "POLICYID", "MEMBER_REF_NO", "PARENT_ID", "SUB_GROUP", "CATEGORY", "INCEPTION_DATE", "DATE_OF_ENTRY", "MEMBER_NAME", "SECONDNAME", "FAMILYNAME", "RELATION", "GENDER", "DATE_OF_BIRTH", "MARITAL_STATUS", "OCCUPATION", "NATIONALITY", "ADDRESS1", "ADDRESS2", "PHONE_NO", "MOBILE_NO", "EMAIL_ID", "PASSPORT_NO", "LOCATION", "RESIDENTIALLOCATION", "WORKLOCATION", "SALARYBAND", "EMIRATES_ID", "UIDNUMBER", "STAFF_ID", "ENTRY_TYPE", "ISCOMMISSION", "ENTITYTYPE", "ENTITYID", "CONTACTNUMBER", "COMPANYEMAIL" };
+                    for (int i = 0; i < MasterColumnHeader.Count(); i++)
+                    {
+                        int ExcelRow = i + 1;
+                        if (ExDataTable.Columns[i].ColumnName == MasterColumnHeader[i])
+                            continue;
+                        else
+                        {
+                            ErrorCount++;
+                            long PrimKey = Convert.ToInt64(_db.ExecuteScalar("Select IM_PR_RENEWAL_SEQ_1.NEXTVAL FROM DUAL").ToString());
+                            _db.Execute("Insert Into IM_PR_Renewal_ErrorLog Select " + PrimKey + "," + ExcelRow + ",'Column " + ExcelRow + " should be '" + MasterColumnHeader[i] + "'.. Please check the format'," + Primary + " From Dual");
+                        }
+                    }
+                    if (ErrorCount > 0)
+                    {
+                        return "E";
+                    }
+                    int Reccnt = 0;
+
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_EUT_RN_CLIENT_PORTAL");
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                        //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+
+                    //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        long RowError = 0;
+
+                        for (int NCnt = 0; NCnt < ColNames.Count()-4; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+                        }
+
+                        if (RowError > 0)
+                        {
+                        }
+                    }
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_EUT_RN_CLIENT_PORTAL " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count()-4; NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+                            InsetSql += "'" + AddNew[0].CreatedByName + "'," + AddNew[0].PolicyCode + "," + AddNew[0].PolicyType + "," + AddNew[0].PrimKey + "";
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                        try
+                        {
+                            _db.Execute("Delete From IM_EUT_RN_CLIENT_PORTAL Where RenewalCode = " + AddNew[0].PrimKey);
+                        }
+                        catch (Exception E)
+                        {
+                        }
+
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            StatusMessage = "S";
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_EUT_RN_CLIENT_PORTAL Where RenewalCode = " + AddNew[0].PrimKey);
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+
+            public string MemberApplicationExcelUpload(long Primary, string FilePath, string CreatedBy)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+                List<RenewalMemberPolicy> AddNew = _db.Query<RenewalMemberPolicy>(" Select FileName,CreatedByName,PolicyCode,PolicyType,PrimKey from IM_PR_APPLICATION_UPLOAD Where PrimKey = " + Primary + "").ToList();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertAdditionXSLXtoDataTable(FilePath);
+
+                    int ErrorCount = 0;
+                    List<string> MasterColumnHeader = new List<string>() { "SNO", "POLICYID", "MEMBER_REF_NO", "PARENT_ID", "SUB_GROUP", "CATEGORY", "INCEPTION_DATE", "DATE_OF_ENTRY", "MEMBER_NAME", "SECONDNAME", "FAMILYNAME", "RELATION", "GENDER", "DATE_OF_BIRTH", "MARITAL_STATUS", "OCCUPATION", "NATIONALITY", "ADDRESS1", "ADDRESS2", "PHONE_NO", "MOBILE_NO", "EMAIL_ID", "PASSPORT_NO", "LOCATION", "RESIDENTIALLOCATION", "WORKLOCATION", "SALARYBAND", "EMIRATES_ID", "UIDNUMBER", "STAFF_ID", "ENTRY_TYPE", "ISCOMMISSION", "ENTITYTYPE", "ENTITYID", "CONTACTNUMBER", "COMPANYEMAIL" };
+                    for (int i = 0; i < MasterColumnHeader.Count(); i++)
+                    {
+                        int ExcelRow = i + 1;
+                        if (ExDataTable.Columns[i].ColumnName == MasterColumnHeader[i])
+                            continue;
+                        else
+                        {
+                            ErrorCount++; 
+                            _db.Execute("Insert Into IM_PR_APPLICATION_ERRORLOG Select (Select Nvl(max(logcode),0)+1 from IM_PR_APPLICATION_ERRORLOG)," + ExcelRow + ",'Column " + ExcelRow + " should be '" + MasterColumnHeader[i] + "'.. Please check the format'," + Primary + " From Dual");
+                        }
+                    }
+                    if (ErrorCount > 0)
+                    {
+                        return "E";
+                    }
+                    int Reccnt = 0;
+
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_EUT_MEMAPP_CLIENT_PORTAL");
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                     //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+
+                    //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        long RowError = 0;
+
+                        for (int NCnt = 0; NCnt < ColNames.Count() - 4; NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+                        }
+
+                        if (RowError > 0)
+                        {
+                        }
+                    }
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_EUT_MEMAPP_CLIENT_PORTAL " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count() - 4; NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+                            InsetSql += "'" + AddNew[0].CreatedByName + "'," + AddNew[0].PolicyCode + "," + AddNew[0].PolicyType + "," + AddNew[0].PrimKey + "";
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                        try
+                        {
+                            _db.Execute("Delete From IM_EUT_MEMAPP_CLIENT_PORTAL Where ApplicationCode = " + AddNew[0].PrimKey);
+                        }
+                        catch (Exception E)
+                        {
+                        }
+
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            StatusMessage = "S";
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_EUT_MEMAPP_CLIENT_PORTAL Where ApplicationCode = " + AddNew[0].PrimKey);
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+
+            public string BaseRateExcelUpload(long Primary, string FilePath)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+                List<PlanMaster> AddNew = _db.Query<PlanMaster>(" Select FileName from IM_PR_PLAN_MASTER Where PLANMASTERCODE = " + Primary).ToList();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertBaseXSLXtoDataTable(FilePath);
+                 
+                    int Reccnt = 0;
+
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_PR_EUT_BASERATES");
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                        //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        long RowError = 0;
+
+                        for (int NCnt = 0; NCnt < ColNames.Count(); NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+                        }
+
+                        if (RowError > 0)
+                        {
+                        }
+                    }
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+                            if (Row[0].ToString().ToUpper() == "TPA")
+                                continue;
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_PR_EUT_BASERATES " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count(); NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length - 1) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                        try
+                        {
+                            _db.Execute("Delete From IM_PR_EUT_BASERATES");
+                        }
+                        catch (Exception E)
+                        {
+                        }
+
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            _db.Execute("Delete FROM IM_PR_EUT_BASERATES WHERE TPANAME IS NULL");
+                            StatusMessage = "S";
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_PR_EUT_BASERATES");
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+
+            public string ActiveList(string FilePath)
+        {
+            string StatusMessage = string.Empty;
+
+            List<string> SQLs = new List<string>();
+            
+            if (!File.Exists(FilePath))
+                StatusMessage = "File not found !";
+            else
+            {
+                List<string> Sqls = new List<string>();
+
+                System.Data.DataTable ExDataTable = ConvertBaseXSLXtoDataTable(FilePath);
+
+                int Reccnt = 0;
+
+                System.Data.DataRow ColRowView = null;
+                System.Data.DataRow DataRowView = null;
+
+                if (ExDataTable.Rows.Count > 0)
+                {
+                    ColRowView = ExDataTable.Rows[0];
+                }
+
+                if (ExDataTable.DefaultView.Count > 1)
+                {
+                    DataRowView = ExDataTable.Rows[1];
+                }
+                else
+                    DataRowView = ColRowView;
+
+                string StrColumns = string.Empty;
+
+                List<string> Columns = new List<string>();
+
+                List<int> ColumnsLength = new List<int>();
+
+                List<Type> ColumnsType = new List<Type>();
+
+                List<string> ColNames = GetColumnNames("IM_PR_NXT_ACTIVE_LIST");
+
+                for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                {
+                    string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                 //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                    StrColumns += (ColumnName + ",");
+
+                    Columns.Add(ColumnName);
+
+                    ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                    ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                }
+                StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                long ExcelErrorCount = 0;
+                List<string> ErrorList = new List<string>();
+                foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                {
+                    Reccnt++;
+                    //if (Reccnt == 1) continue;
+                    long RowError = 0;
+
+                    for (int NCnt = 0; NCnt < ColNames.Count(); NCnt++)
+                    {
+                        string ColumnData = Row[NCnt].ToString();
+                    }
+
+                    if (RowError > 0)
+                    {
+                    }
+                }
+
+                if (ExcelErrorCount == 0)
+                {
+                    Reccnt = 0;
+                    foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                    {
+                        Reccnt++;
+                        //if (Reccnt == 1) continue;
+                        if (Row[0].ToString().ToUpper() == "TPA")
+                            continue;
+                        string InsertData = string.Empty;
+
+                        string InsetSql = "Insert Into IM_PR_NXT_ACTIVE_LIST " + StrColumns + " Values(";
+
+                        for (int NCnt = 0; NCnt < ColNames.Count(); NCnt++)
+                        {
+                            string ColumnData = Row[NCnt].ToString();
+
+                            InsertData += ColumnData;
+
+                            if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                            if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(string))
+                            {
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                            }
+                            else if (Row[NCnt].GetType() == typeof(DateTime))
+                            {
+                                //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                            }
+                            else
+                                InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                        }
+
+
+                        InsetSql = (InsetSql.Substring(0, InsetSql.Length - 1) + ")");
+
+                        if (!string.IsNullOrEmpty(InsertData.Trim()))
+                            SQLs.Add(InsetSql);
+
+                        Reccnt++;
+                    }
+
+                    try
+                    {
+                        _db.Execute("Delete From IM_PR_NXT_ACTIVE_LIST");
+                    }
+                    catch (Exception E)
+                    {
+                    }
+
+                    try
+                    {
+                        foreach (string str in SQLs)
+                        {
+                            _db.Execute(str);
+                        }
+                       // _db.Execute("Delete FROM IM_PR_NXT_ACTIVE_LIST");
+                        StatusMessage = "S";
+                    }
+                    catch (Exception E)
+                    {
+                        _db.Execute("Delete From IM_PR_NXT_ACTIVE_LIST");
+                        StatusMessage = "E";
+                    }
+                }
+
+            }
+            return StatusMessage;
+        }
+
+            /* [WebMethod]
+         public string UploadExclusion(string FilePath)
+         {
+             string StatusMessage = string.Empty;
+
+
+
+             if (File.Exists(FilePath))
+                 StatusMessage = "File not found !";
+             else
+             {
+
+                 foreach (string EFileName in Directory.GetFiles("E:\\Exclusion"))
+                 {
+                     string[] ExcelSheets = GetExcelSheetNames(EFileName);
+
+                     for (int ec = 0; ec < ExcelSheets.Count(); ec++)
+                     {
+                         List<string> Sqls = new List<string>();
+                         List<string> SQLs = new List<string>();
+                         if (ExcelSheets[ec].Contains("_xlnm#_FilterDatabase"))
+                             continue;
+                         System.Data.DataTable ExDataTable = ConvertXSLXtoDataTable1(EFileName, ExcelSheets[ec]);
+
+                         int Reccnt = 0;
+
+                         System.Data.DataRow ColRowView = null;
+                         System.Data.DataRow DataRowView = null;
+
+                         if (ExDataTable.Rows.Count > 0)
+                         {
+                             ColRowView = ExDataTable.Rows[0];
+                         }
+
+                         if (ExDataTable.DefaultView.Count > 1)
+                         {
+                             DataRowView = ExDataTable.Rows[1];
+                         }
+                         else
+                             DataRowView = ColRowView;
+
+                         string StrColumns = string.Empty;
+
+                         List<string> Columns = new List<string>();
+
+                         List<int> ColumnsLength = new List<int>();
+
+                         List<Type> ColumnsType = new List<Type>();
+
+                         List<string> ColNames = GetColumnNames("IM_EX_PR");
+
+                         StrColumns += "PolicyID,";
+                         for (int Cnt = 0; Cnt < ColRowView.ItemArray.Length; Cnt++)
+                         {
+                             string ColumnName = ColNames[Cnt+1].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                          //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                             StrColumns += (ColumnName + ",");
+
+                             Columns.Add(ColumnName);
+
+                             ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                             ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                         }
+
+                         StrColumns += "CATEGORYNAME'";
+                         StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                         long ExcelErrorCount = 0;
+                         List<string> ErrorList = new List<string>();
+                         foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                         {
+                             Reccnt++;
+                             //if (Reccnt == 1) continue;
+                             long RowError = 0;
+
+                             for (int NCnt = 0; NCnt < Row.ItemArray.Length; NCnt++)
+                             {
+                                 string ColumnData = Row[NCnt].ToString();
+                             }
+
+                             if (RowError > 0)
+                             {
+                             }
+                         }
+
+                         if (ExcelErrorCount == 0)
+                         {
+                             Reccnt = 0;
+                             foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                             {
+                                 Reccnt++;
+                                 //if (Reccnt == 1) continue;
+
+                                 string InsertData = string.Empty;
+
+                                 string InsetSql = "Insert Into IM_EX_PR " + StrColumns + " Values('"+Path.GetFileNameWithoutExtension(EFileName)+ "',";
+
+                                 for (int NCnt = 0; NCnt < Row.ItemArray.Length; NCnt++)
+                                 {
+                                     string ColumnData = Row[NCnt].ToString();
+
+                                     InsertData += ColumnData;
+
+                                     if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                     if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                     {
+                                         InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                     }
+                                     else if (Row[NCnt].GetType() == typeof(string))
+                                     {
+                                         InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                     }
+                                     else if (Row[NCnt].GetType() == typeof(DateTime))
+                                     {
+                                         //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                         DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                         InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                     }
+                                     else
+                                         InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                                 }
+
+                                 ExcelSheets[ec] = ExcelSheets[ec].Replace("'", "");
+                                 InsetSql += "'" + ExcelSheets[ec] + "''";
+                                 InsetSql = (InsetSql.Substring(0, InsetSql.Length - 1) + ")");
+
+                                 if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                     SQLs.Add(InsetSql);
+
+                                 Reccnt++;
+                             }
+
+                             try
+                             {
+
+                             }
+                             catch (Exception E)
+                             {
+                             }
+
+                             try
+                             {
+                                 foreach (string str in SQLs)
+                                 {
+                                     _db.Execute(str);
+                                 }
+                                 StatusMessage = "S";
+                             }
+                             catch (Exception E)
+                             {
+
+                             }
+                         }
+                     }
+
+                 }
+
+             }
+             return StatusMessage;
+         }
+         */
+            public static DataTable ConvertXSLXtoDataTable(string strFilePath)
+            {
+                string connString = string.Empty;
+                string extension = System.IO.Path.GetExtension(strFilePath).ToLower();
+                if (extension.Trim() == ".xls")
+                {
+                    connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;IMEX=1\"";
+                }
+                else if (extension.Trim() == ".xlsx")
+                {
+                    connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;IMEX=1\"";
+                }
+                OleDbConnection oledbConn = new OleDbConnection(connString);
+                DataTable dt = new DataTable();
+                DataSet ds = new DataSet();
+
+                try
+                {
+                    oledbConn.Open();
+                    using (DataTable Sheets = oledbConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null))
+                    {
+
+                        string worksheets = Sheets.Rows[0]["TABLE_NAME"].ToString();
+                        OleDbCommand cmd = new OleDbCommand(String.Format("SELECT * FROM [{0}]", worksheets), oledbConn);
+                        OleDbDataAdapter oleda = new OleDbDataAdapter();
+                        oleda.SelectCommand = cmd;
+
+                        oleda.Fill(ds);
+
+                        dt = ds.Tables[0];
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                }
+                finally
+                {
+
+                    oledbConn.Close();
+                }
+
+                return dt;
+            }
+
+            public static DataTable ConvertAdditionXSLXtoDataTable(string strFilePath)
+            {
+                string connString = string.Empty;
+                string extension = System.IO.Path.GetExtension(strFilePath).ToLower();
+                if (extension.Trim() == ".xls")
+                {
+                    connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;\"";
+                }
+                else if (extension.Trim() == ".xlsx")
+                {
+                    connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;\"";
+                }
+                OleDbConnection oledbConn = new OleDbConnection(connString);
+                DataTable dt = new DataTable();
+                DataSet ds = new DataSet();
+
+                try
+                {
+                    oledbConn.Open();
+                    using (DataTable Sheets = oledbConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null))
+                    {
+
+                        for (int i = 0; i < Sheets.Rows.Count; i++)
+                        {
+                            if (Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("COMMISSION") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("RELATION") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("GENDER") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("MARITAL") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("NATIONALITY") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("LOCATION"))
+                                continue;
+                            if (Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("ENTRY") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("SALARY") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("ENTITY") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("GENDER") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("MARITAL") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("NATIONALITY") || Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("LOCATION"))
+                                continue;
+                            if (Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("_XLNM#"))
+                                continue;   
+                            string worksheets = Sheets.Rows[i]["TABLE_NAME"].ToString();
+                            OleDbCommand cmd = new OleDbCommand(String.Format("SELECT * FROM [{0}]", worksheets), oledbConn);
+                            OleDbDataAdapter oleda = new OleDbDataAdapter();
+                            oleda.SelectCommand = cmd;
+                            oleda.Fill(ds);
+                            if (ds.Tables[0].Rows.Count > 0)
+                                dt = ds.Tables[0]; 
+                        }
+
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                }
+                finally
+                {
+
+                    oledbConn.Close();
+                }
+
+                return dt;
+            }
+
+            public static DataTable ConvertBaseXSLXtoDataTable(string strFilePath)
+                {
+                    string connString = string.Empty;
+                    string extension = System.IO.Path.GetExtension(strFilePath).ToLower();
+                    if (extension.Trim() == ".xls")
+                    {
+                        connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;IMEX=1\"";
+                    }
+                    else if (extension.Trim() == ".xlsx")
+                    {
+                        connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;IMEX=1\"";
+                    }
+                    OleDbConnection oledbConn = new OleDbConnection(connString);
+                    DataTable dt = new DataTable();
+                    DataSet ds = new DataSet();
+
+                    try
+                    {
+                        oledbConn.Open();
+                        using (DataTable Sheets = oledbConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null))
+                        {
+                            for(int i = 0;i< Sheets.Rows.Count; i++)
+                            {
+                                if (Sheets.Rows[i]["TABLE_NAME"].ToString().Contains("Channel")|| Sheets.Rows[i]["TABLE_NAME"].ToString().Contains("Category")|| Sheets.Rows[i]["TABLE_NAME"].ToString().Contains("Managed")|| Sheets.Rows[i]["TABLE_NAME"].ToString().Contains("Relation")|| Sheets.Rows[i]["TABLE_NAME"].ToString().Contains("Gender")|| Sheets.Rows[i]["TABLE_NAME"].ToString().Contains("Marital"))
+                                    continue;
+                                if (Sheets.Rows[i]["TABLE_NAME"].ToString().ToUpper().Contains("_XLNM#"))
+                                    continue;
+                                string worksheets = Sheets.Rows[i]["TABLE_NAME"].ToString();
+                                OleDbCommand cmd = new OleDbCommand(String.Format("SELECT * FROM [{0}]", worksheets), oledbConn);
+                                OleDbDataAdapter oleda = new OleDbDataAdapter();
+                                oleda.SelectCommand = cmd; 
+                                oleda.Fill(ds);
+                                dt = ds.Tables[0];
+                            }
+                   
+
+                   
+                        }
+
+                    }
+                    catch (Exception ex)
+                    {
+                    }
+                    finally
+                    {
+
+                        oledbConn.Close();
+                    }
+
+                    return dt;
+                } 
+      
+            public List<string> GetColumnNames(string TableName)
+                {
+                    List<string> ColumnNames = new List<string>();
+                    string Query = " SELECT COLUMN_NAME FROM USER_TAB_COLS WHERE TABLE_NAME = '" + TableName + "' ORDER BY COLUMN_ID ASC";
+                    ColumnNames = _db.Query<string>(Query).ToList();
+
+                    return ColumnNames;
+                }
+
+
+            public string GroupPolicyMemberUploadList(string FilePath,string LogCode)
+            {
+                string StatusMessage = string.Empty;
+
+                List<string> SQLs = new List<string>();
+
+                if (!File.Exists(FilePath))
+                    StatusMessage = "File not found !";
+                else
+                {
+                    List<string> Sqls = new List<string>();
+
+                    System.Data.DataTable ExDataTable = ConvertXSLXtoDataTable(FilePath);
+
+                    int Reccnt = 0;
+
+                    System.Data.DataRow ColRowView = null;
+                    System.Data.DataRow DataRowView = null;
+
+                    if (ExDataTable.Rows.Count > 0)
+                    {
+                        ColRowView = ExDataTable.Rows[0];
+                    }
+
+                    if (ExDataTable.DefaultView.Count > 1)
+                    {
+                        DataRowView = ExDataTable.Rows[1];
+                    }
+                    else
+                        DataRowView = ColRowView;
+
+
+                    string StrColumns = string.Empty;
+
+                    List<string> Columns = new List<string>();
+
+                    List<int> ColumnsLength = new List<int>();
+
+                    List<Type> ColumnsType = new List<Type>();
+
+                    List<string> ColNames = GetColumnNames("IM_PR_NXT_ACTIVE_LIST");
+
+
+                    for (int Cnt = 0; Cnt < ColNames.Count(); Cnt++)
+                    {
+                        string ColumnName = ColNames[Cnt].ToString();// ColRowView[Cnt].ToString().Replace(" ", "");
+                                                                     //return "SU" + ColNames.Count() + ColRowView.ItemArray.Length;
+                        StrColumns += (ColumnName + ",");
+
+                        Columns.Add(ColumnName);
+
+                        ColumnsLength.Add((ColumnName.Length == 0 ? 100 : ColumnName.Length));
+
+                        //ColumnsType.Add(DataRowView[Cnt].GetType());
+
+                    }
+
+                    //StrColumns += "CREATEDBYNAME,POLICYCODE,POLICYTYPE";
+                    StrColumns = ("(" + StrColumns.Substring(0, StrColumns.Length - 1) + ")");
+
+                    long ExcelErrorCount = 0;
+                    List<string> ErrorList = new List<string>();
+                
+
+
+                    if (ExcelErrorCount == 0)
+                    {
+                        Reccnt = 0;
+                        foreach (System.Data.DataRow Row in ExDataTable.Rows)
+                        {
+                            Reccnt++;
+                            //if (Reccnt == 1) continue;
+
+                            string InsertData = string.Empty;
+
+                            string InsetSql = "Insert Into IM_PR_NXT_ACTIVE_LIST " + StrColumns + " Values(";
+
+                            for (int NCnt = 0; NCnt < ColNames.Count(); NCnt++)
+                            {
+                                string ColumnData = Row[NCnt].ToString();
+
+                                InsertData += ColumnData;
+
+                                if (ColumnData.Replace("'", "").Length > ColumnsLength[NCnt]) ColumnsLength[NCnt] = ColumnData.Replace("'", "").Length;
+
+                                if (Row[NCnt].GetType() == typeof(int) || Row[NCnt].GetType() == typeof(long) || Row[NCnt].GetType() == typeof(double) || Row[NCnt].GetType() == typeof(float))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(string))
+                                {
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+                                }
+                                else if (Row[NCnt].GetType() == typeof(DateTime))
+                                {
+                                    //InsetSql += ("to_date('"+ColumnData + "','DD/MM/RRRR'),");
+                                    DateTime DateColumn = Convert.ToDateTime(ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim());
+                                    InsetSql += ("to_date('" + DateColumn.Day + "/" + DateColumn.Month + "/" + DateColumn.Year + "','dd/MM/RRRR'),");
+                                }
+                                else
+                                    InsetSql += ("'" + ColumnData.Replace("'", "").Replace("12:00:00 AM", "").Trim() + "',");//InsetSql += ("'" + ColumnData.Replace("'", "") + "',");
+
+
+                            }
+
+                            InsetSql = (InsetSql.Substring(0, InsetSql.Length - 1) + ")");
+
+                            if (!string.IsNullOrEmpty(InsertData.Trim()))
+                                SQLs.Add(InsetSql);
+
+                            Reccnt++;
+                        }
+
+                       /* try
+                        {
+                            _db.Execute("Delete From IM_EUT_POLICY_MEMBERS_FULL1");
+                        }
+                        catch (Exception E)
+                        {
+                        }
+                        */
+                        try
+                        {
+                            foreach (string str in SQLs)
+                            {
+                                _db.Execute(str);
+                            }
+                            StatusMessage = "S";
+                        }
+                        catch (Exception E)
+                        {
+                            _db.Execute("Delete From IM_PR_NXT_ACTIVE_LIST");
+                            StatusMessage = "E";
+                        }
+                    }
+
+                }
+                return StatusMessage;
+            }
+         
+            public string GenerateWordDocument(long QuotationCode)
+            {
+                string guid = System.Guid.NewGuid().ToString();
+                string SourceFileName = _db.ExecuteScalar("Select FileName from IM_PR_QUOTATION_FILE Where OwnerDtlCode in (Select Decode(AdministratedBy,1,100000000000000002,3,100000000000000004,ADMINISTRATEDDTLCODE) From IM_PR_Quotation Where QUOTATION_CODE = " + QuotationCode + ")").ToString();
+                string SourceFile = @"D:\Publish\InsuranceClientServiceLive\Quotation\" + SourceFileName;
+                string DestFolder = @"\\compass-web\PortalLive\InsuranceClientPortal\Content\QuotationReport\" + guid;
+                if (!Directory.Exists(DestFolder))
+                {
+                    Directory.CreateDirectory(DestFolder);
+                }
+                string DestFile = DestFolder + "\\Quotation.docx";
+                string DestFilePdf = DestFolder + "\\Quotation.pdf";
+                File.Copy(SourceFile, DestFile);
+                word.Application app = new word.Application();
+                word.Document doc = app.Documents.Open(DestFile);
+
+                var textToFind = "[#QUOTATIONDATE#]";
+                var textToReplace = _db.ExecuteScalar("SELECT DISTINCT To_Char(QUOTATIONDATE,'DD/MM/RRRR') FROM IM_PR_QUOTATION_REPORT WHERE QUOTATION_CODE = "+ QuotationCode);
+                var matchCase = true;
+                var matchWholeWord = true;
+                var matchWildcards = false;
+                var matchSoundsLike = false;
+                var matchAllWordForms = false;
+                var forward = true;
+                var wrap = 1;
+                var format = false;
+                var replace = 2;
+
+                app.Selection.Find.Execute(
+                   textToFind,
+                   matchCase,
+                   matchWholeWord,
+                   matchWildcards,
+                   matchSoundsLike,
+                   matchAllWordForms,
+                   forward,
+                   wrap,
+                   format,
+                   textToReplace,
+                   replace);
+
+                textToFind = "[#QUOTATIONNO#]";
+                textToReplace = _db.ExecuteScalar("SELECT DISTINCT QUOTATIONNO FROM IM_PR_QUOTATION_REPORT WHERE QUOTATION_CODE = " + QuotationCode);
+
+
+                app.Selection.Find.Execute(
+                   textToFind,
+                   matchCase,
+                   matchWholeWord,
+                   matchWildcards,
+                   matchSoundsLike,
+                   matchAllWordForms,
+                   forward,
+                   wrap,
+                   format,
+                   textToReplace,
+                   replace);
+
+                textToFind = "[#CUSTOMERNAME#]";
+                textToReplace = _db.ExecuteScalar("SELECT DISTINCT CLIENTNAME FROM IM_PR_QUOTATION_REPORT WHERE QUOTATION_CODE = "+ QuotationCode);
+
+                app.Selection.Find.Execute(
+                   textToFind,
+                   matchCase,
+                   matchWholeWord,
+                   matchWildcards,
+                   matchSoundsLike,
+                   matchAllWordForms,
+                   forward,
+                   wrap,
+                   format,
+                   textToReplace,
+                   replace);
+
+                textToFind = "[#TPANAME#]";
+                textToReplace = _db.ExecuteScalar("SELECT Decode(OwnerCode,1,'NextCare',3,'NGI',11,'FMC') TPANAME FROM IM_PR_ADMINISTRATED_DTL WHERE OWNERDTLCODE IN(Select ADMINISTRATEDDTLCODE From IM_PR_Quotation Where QUOTATION_CODE = " + QuotationCode + ")");
+
+                app.Selection.Find.Execute(
+                   textToFind,
+                   matchCase,
+                   matchWholeWord,
+                   matchWildcards,
+                   matchSoundsLike,
+                   matchAllWordForms,
+                   forward,
+                   wrap,
+                   format,
+                   textToReplace,
+                   replace);
+
+                textToFind = "[#MEMBERCOUNT#]";
+                textToReplace = _db.ExecuteScalar("SELECT SUM(MEMBERCOUNT) FROM IM_PR_QUOTATION_REPORT WHERE PREMIUMAMOUNT <> 0 AND QUOTATION_CODE = "+ QuotationCode);
+
+                app.Selection.Find.Execute(
+                   textToFind,
+                   matchCase,
+                   matchWholeWord,
+                   matchWildcards,
+                   matchSoundsLike,
+                   matchAllWordForms,
+                   forward,
+                   wrap,
+                   format,
+                   textToReplace,
+                   replace);
+
+                textToFind = "[#PREMIUMVALUE#]";
+                textToReplace = _db.ExecuteScalar("SELECT SUM(TOTALPREMIUM) FROM IM_PR_QUOTATION_REPORT WHERE QUOTATION_CODE = "+ QuotationCode);
+
+                app.Selection.Find.Execute(
+                   textToFind,
+                   matchCase,
+                   matchWholeWord,
+                   matchWildcards,
+                   matchSoundsLike,
+                   matchAllWordForms,
+                   forward,
+                   wrap,
+                   format,
+                   textToReplace,
+                   replace);
+
+                object what = word.WdGoToItem.wdGoToPage;
+                object which = word.WdGoToDirection.wdGoToFirst;
+                object missing = System.Reflection.Missing.Value;
+                // Get pages count
+                Microsoft.Office.Interop.Word.WdStatistic PagesCountStat = Microsoft.Office.Interop.Word.WdStatistic.wdStatisticPages;
+                int PagesCount = doc.ComputeStatistics(PagesCountStat, ref missing);
+
+                doc.Sections[1].Headers[word.WdHeaderFooterIndex.wdHeaderFooterPrimary].Range.Text = "Ref No : ";
+                doc.Sections[1].Headers[word.WdHeaderFooterIndex.wdHeaderFooterPrimary].Range.Text = "Ref No : ";  
+                object count = PagesCount;
+
+                app.Selection.GoTo(ref what, ref which, ref count, ref missing);
+
+                Microsoft.Office.Interop.Word.Paragraph para1 = doc.Content.Paragraphs.Add(ref missing);
+                object styleHeading1 = "Heading 1";
+                para1.Range.set_Style(ref styleHeading1);
+                para1.Range.Text = "Appendix-3 (Population)";
+                para1.Range.InsertParagraphAfter();
+
+                int RowCount = Convert.ToInt16(_db.ExecuteScalar("SELECT Count(*) FROM IM_PR_QUOTATION_REPORT WHERE PREMIUMAMOUNT <> 0 and QUOTATION_CODE = " + QuotationCode).ToString());
+
+                //Create a 5X5 table and insert some dummy record
+                word.Table firstTable = doc.Tables.Add(para1.Range, RowCount + 1, 6, ref missing, ref missing);
+
+                firstTable.Borders.Enable = 1;
+
+                string ConnectionString = "DATA SOURCE=(DESCRIPTION =(ADDRESS =(PROTOCOL = TCP)(HOST = 192.168.11.4)(PORT = 1555))(CONNECT_DATA =(SERVER = DEDICATED)(SERVICE_NAME = prod)));PERSIST SECURITY INFO=True;USER ID=CAPPS;Password=COMPASS2015";
+                OracleConnection con = new OracleConnection(ConnectionString);
+                OracleCommand cmd = new OracleCommand();
+                cmd.CommandText = "SELECT ROWNUM AS SNO,MEMBERCOUNT,GENDER,AGEBAND,PREMIUMAMOUNT,TOTALPREMIUM FROM IM_PR_QUOTATION_REPORT WHERE PREMIUMAMOUNT <> 0 and QUOTATION_CODE = " + QuotationCode;
+                cmd.Connection = con;
+                con.Open();
+                OracleDataReader dr = cmd.ExecuteReader();
+                string BirthDate = string.Empty;
+                if (dr.HasRows)
+                {
+                    int HdrCnt = 0;
+                    foreach (word.Cell cell in firstTable.Rows[1].Cells)
+                    {
+                        if (HdrCnt == 0)
+                            cell.Range.Text = "S.No";
+                        else if (HdrCnt == 1)
+                            cell.Range.Text = "No of Members";
+                        else if (HdrCnt == 2)
+                            cell.Range.Text = "Gender";
+                        else if (HdrCnt == 3)
+                            cell.Range.Text = "Age Range";
+                        else if (HdrCnt == 4)
+                            cell.Range.Text = "Premium";
+                        else if (HdrCnt == 5)
+                            cell.Range.Text = "Total";
+                        cell.Range.Font.Bold = 1;
+                        //other format properties goes here
+                        cell.Range.Font.Name = "Calibri";
+                        cell.Range.Font.Size = 10;
+                        Color TXTColor = System.Drawing.Color.White;
+                        cell.Range.Font.Color = (word.WdColor)(TXTColor.R + 0x100 * TXTColor.G + 0x10000 * TXTColor.B);
+                        //cell.Range.Font.ColorIndex = WdColorIndex.wdGray25; 
+                        Color BGColor = Color.FromArgb(0, 79, 129, 189);
+                        cell.Shading.BackgroundPatternColor = (word.WdColor)(BGColor.R + 0x100 * BGColor.G + 0x10000 * BGColor.B);
+                        //Center alignment for the Header cells 
+                        cell.VerticalAlignment = word.WdCellVerticalAlignment.wdCellAlignVerticalCenter;
+                        cell.Range.ParagraphFormat.Alignment = word.WdParagraphAlignment.wdAlignParagraphCenter;
+                        HdrCnt++;
+                    }
+                    int cnt = 2;
+                    while (dr.Read())
+                    {
+                        int Cellcnt = 0;
+                        foreach (word.Cell cell in firstTable.Rows[cnt].Cells)
+                        {
+                            cell.Range.Text = dr[Cellcnt].ToString();
+                            cell.Range.Font.Name = "Calibri";
+                            cell.Range.Font.Size = 10;
+                            cell.Range.Font.Bold = 0;
+                            cell.Range.Font.Color = word.WdColor.wdColorBlack;
+                            cell.VerticalAlignment = word.WdCellVerticalAlignment.wdCellAlignVerticalCenter;
+                            cell.Range.ParagraphFormat.Alignment = word.WdParagraphAlignment.wdAlignParagraphCenter;
+                            Cellcnt++;
+                        }
+                        cnt++;
+
+                    }
+                }
+                con.Close();
+
+                doc.Close(word.WdSaveOptions.wdSaveChanges);
+                word.Document Pdfdoc = app.Documents.Open(DestFile);
+                Pdfdoc.ExportAsFixedFormat(DestFilePdf, word.WdExportFormat.wdExportFormatPDF);
+                Pdfdoc.Close();
+                app.Quit();
+                return guid;
+            }
+
+        /*public String[] GetExcelSheetNames(string excelFile)
+    {
+        OleDbConnection objConn = null;
+        System.Data.DataTable dt = null;
+
+        try
+        {
+            // Connection String. Change the excel file to the file you
+            // will search.
+            String connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + excelFile + ";Extended Properties='Excel 12.0 Xml;HDR=YES'";
+            // Create connection object by using the preceding connection string.
+            objConn = new OleDbConnection(connString);
+            // Open connection with the database.
+            objConn.Open();
+            // Get the data table containg the schema guid.
+            dt = objConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+
+            if (dt == null)
+            {
+                return null;
+            }
+
+            String[] excelSheets = new String[dt.Rows.Count];
+            int i = 0;
+
+            // Add the sheet name to the string array.
+            foreach (DataRow row in dt.Rows)
+            {
+                excelSheets[i] = row["TABLE_NAME"].ToString();
+                i++;
+            }
+
+            // Loop through all of the sheets if you want too...
+            for (int j = 0; j < excelSheets.Length; j++)
+            {
+                // Query each excel sheet.
+            }
+
+            return excelSheets;
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+        finally
+        {
+            // Clean up.
+            if (objConn != null)
+            {
+                objConn.Close();
+                objConn.Dispose();
+            }
+            if (dt != null)
+            {
+                dt.Dispose();
+            }
+        }
+    }
+
+    public static DataTable ConvertXSLXtoDataTable1(string strFilePath,string WorkSheet)
+    {
+        string connString = string.Empty;
+        string extension = System.IO.Path.GetExtension(strFilePath).ToLower();
+        if (extension.Trim() == ".xls")
+        {
+            connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;IMEX=1\"";
+        }
+        else if (extension.Trim() == ".xlsx")
+        {
+            connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + strFilePath + ";Extended Properties=\"Excel 12.0;HDR=Yes;IMEX=1\"";
+        }
+        OleDbConnection oledbConn = new OleDbConnection(connString);
+        DataTable dt = new DataTable();
+        DataSet ds = new DataSet();
+
+        try
+        {
+            oledbConn.Open();
+            using (DataTable Sheets = oledbConn.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null))
+            { 
+                OleDbCommand cmd = new OleDbCommand(String.Format("SELECT * FROM [{0}]", WorkSheet), oledbConn);
+                OleDbDataAdapter oleda = new OleDbDataAdapter();
+                oleda.SelectCommand = cmd;
+
+                oleda.Fill(ds);
+
+                dt = ds.Tables[0];
+            }
+
+        }
+        catch (Exception ex)
+        {
+        }
+        finally
+        {
+
+            oledbConn.Close();
+        }
+
+        return dt;
+    }
+    */
+    }
+}

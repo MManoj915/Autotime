@@ -1,0 +1,43 @@
+select * from (
+select
+to_char(nvl(Endo.ACARDID,HDR.CARDNO)) MEMBERREFNO,
+nvl(to_CHAR(NVL(Pol.Startdate,IndPol.Startdate),'RRRR'),to_CHAR(NVL(Pol.Startdate,IndPol.STARTDATE),'RRRR')) UWYEAR,
+INVOICENUMBER CLAIMNO,
+ACR_FORM_NO FORMNOTYPESEQNO,
+IMP.PROVIDERID,
+TRANSACTIONDATE CLAIMTRANSACTIONDATE,
+REFDATE PAYMENTDATE,
+to_Char(ENCOUNTER_START_DATE,'DD') TREAT_DAY,
+to_Char(ENCOUNTER_START_DATE,'MM') TREAT_MONTH,
+to_Char(ENCOUNTER_START_DATE,'RRRR') TREAT_YEAR,
+GEN10.CONSTANTNAME MANAGED_BY,
+NVL(HDR.APPROVED_AMOUNT,0)+(SELECT NVL(SUM(NVL(VW.DENIEDAMOUNT,0)),0) DENIEDAMOUNT FROM IM_DECLINEAMOUNT_VW VW
+WHERE VW.CLAIM_CODE = HDR.CLAIM_CODE  AND HDR.CLAIM_CODE NOT IN (SELECT CLAIM_CODE FROM REJDEC) AND REQUEST_TYPE IN (1,2)) NETAMOUNT,
+0 OutstandingAmount
+                            
+FROM                              
+( 
+select distinct HDR.*,REFDATE from
+(select  DTL.CLAIMCODE,max(JVPOS.REFDATE) REFDATE from
+IM_ENDPOSTCLAIMDTL  DTL -- on   HDR.CLAIM_CODE=DTL.CLAIMCODE   and nvl(DTL.INCLUDE_CLAIM,0)=0                             
+join IM_ENDORSEMENTPOSTING POS on POS.ENDORESMENTCODE=DTL.ENDORESMENTCODE  and nvl(DTL.INCLUDE_CLAIM,0)=0
+join im_ngi_jvposting jvpos on jvpos.CLAIMREFCODE = POS.ENDORESMENTCODE and jvpos.memotype=0 and  NVL(JVPOS.REVERSEJVDONE,0) = 0
+where TO_DATE(jvpos.REFDATE,'DD/MM/RRRR') between TO_DATE('01/01/2016','DD/MM/RRRR') AND TO_DATE('30/04/2016','DD/MM/RRRR') group by  DTL.CLAIMCODE) DTL
+join IM_CLAIM_PROCESS_HEADER HDR on HDR.CLAIM_CODE=DTL.CLAIMCODE
+and to_date(HDR.ENCOUNTER_START_DATE,'DD/MM/RRRR') <= TO_DATE('31/12/'||(to_number(to_char(TO_DATE('30/04/2016' ,'DD/MM/RRRR'),'RRRR'))-1),'DD/MM/RRRR')
+--and HDR.APPROVED_AMOUNT<>0
+) HDR
+left JOIN (select member_code,POLICYTYPE,POLICYCODE from IM_MEMBERS) IM ON IM.MEMBER_CODE = HDR.MEMBER_CODE
+--JOIN IM_CORDPRINT IMC ON IMC.MEMBERCODE = HDR.MEMBER_CODE AND HDR.POLICYCODE = IMC.POLICYCODE AND HDR.CATEGORY_CODE = IMC.CATEGORYCODE
+left JOIN IM_PROVIDERS IMP ON IMP.PROVIDERCODE =HDR.PROVIDER_CODE
+left join im_memberpolicy Endo on Endo.membercode=HDR.member_code and HDR.category_code=Endo.CATEGORYCODE and HDR.policycode=Endo.policycode
+--left join im_members mem on mem.member_code=HDR.member_code
+left  join  IM_Policy Pol on Pol.PolicyCode=nvl(nvl(Endo.PolicyCode,HDR.policycode),IM.POLICYCODE) and nvl(nvl(Endo.typee,HDR.POLICYTYPECODE),IM.POLICYTYPE)=1
+left  join  IM_INDIVIDUALPOLICY IndPol on IndPol.INDIVIDUALPOLICYCODE=nvl(nvl(Endo.PolicyCode,HDR.policycode),IM.POLICYCODE) and nvl(nvl(Endo.typee,HDR.POLICYTYPECODE),IM.POLICYTYPE)=2
+left join Im_agents agnt on agnt.AgentCode=nvl(Pol.AgentCode,IndPol.AgentCode)
+left join Im_Brokers Bro on Bro.BrokerCode=nvl(Pol.BrokerCode,IndPol.BrokerCode)
+left join HR_ORGANIZATIONS_D org on org.ORGANIZATIONS_CODE=nvl(Pol.BRANCHCODE,nvl(IndPol.BRANCHCODE,nvl(Bro.BranchCode,agnt.BranchCode)))
+left join genconstant gen10 on GEN10.CONSTANTVALUE=nvl(pol.OWNERCODE,IndPol.OWNERCODE)  and GEN10.CATEGORY='NGIQUOTATIONTYPE' and GEN10.LANGUAGECODE='en-US'
+---where nvl(Pol.OWNERCODE,IndPol.OWNERCODE) =3
+ 
+) where NETAMOUNT<>0

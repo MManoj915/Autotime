@@ -1,0 +1,1722 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using SBS.Base;
+using SBS.Base.Data.Attributes;
+using SBS.Base.Validation;
+using SBS.Globals;
+using System.Web.Script.Serialization;
+using SBS.Business.Objects.HumanResource.NGI.UnderWritting.GeneralSetting;
+using SBS.Business.Objects.HumanResource.NGI.UnderWritting.MemberPolicy;
+using Oracle.DataAccess.Client;
+using System.Data;
+using  SBS.Business.Objects.HumanResource.NGI.SetUp;
+using SBS.Business.Objects.HumanResource.NGI.CreditModule;
+using SBS.Business.Objects.HumanResource.NGI.Treaty;
+using SBS.Business.Objects.HumanResource.NGI.UnderWritting;
+using SBS.Business.Objects.HumanResource.NGI.UnderWritting.Policies;
+
+namespace SBS.Business.Objects.HRTimeAttendace.NGI.ClaimProcessing
+{
+    [Terminologies("LBLEDUPREFIX", "LBLEDUREGNO", "LBLEDUSUFFIX", "LBLHRREFDATE", "LBLPOLICYTYPE", "LBLPOLICYID", "LBLDEPRECIATIONPOLICYNAME", "LBLINDIVIDUALPOLICYID", "LBLPOLICYSTARTDATE", "LBLPOLICYENDDATE", "RL_INVADDITIONTOTAL", "LBLREFUNDTOTAL", "LBLNETTOTAL", "LBLBILLINGTYPE", "LBLNEWBILLINGTYPE", "LBLAGENTNAME", "LBLBROKERNAME", "LBLGROUPNAME", "LBLMEMBERNAME", "NGIAUTHORIZEDSTATUS"), ReferenceNo("FinancePrefix", "FinanceNo", "FinanceSuffix", "FinanceFullno"), Serializable]
+    [PostReferenceAutoNoColumns("FinancePrefix,FinanceNo,FinanceSuffix,FinanceFullno")]
+    public class PolicyFinancePosting : BusinessBase<PolicyFinancePosting>
+    {
+        [ColumnName("PolicyFinancePostingCode")]
+        [PrimaryKey("SerialNo", true)]
+        private long _ID;
+
+        [ColumnName("FinancePrefix")]
+        [TerminologyCode("LBLEDUPREFIX")]
+        [NotRequired]
+        [MaxLength(20)]
+        [CharacterCasing(CharacterCasingType.UpperCase)]
+        [StringValidation(StringValidationType.AlphaOnly)]
+        [NonVisible]
+        private string _FinancePrefix;
+
+        [ColumnName("FinanceNo")]
+        [Autonumber]
+        [NonEdit]
+        [ShowInList]
+        [Searchable]
+        //[SerialNoKeyGenneration("CompanyCode")]
+        [TerminologyCode("LBLEDUREGNO")]
+        private long _FinanceNo;
+
+        [ColumnName("FinanceSuffix")]
+        [NonVisible]
+        [MaxLength(50)]
+        [StringValidation(StringValidationType.AlphaOnly)]
+        [CharacterCasing(CharacterCasingType.UpperCase)]
+        [TerminologyCode("LBLEDUSUFFIX")]
+        [NotRequired]
+        private string _FinanceSuffix;
+
+        [ColumnName("FinanceFullno")]
+        [NonVisible]
+        [TerminologyCode("LBLEDUREGNO")]
+        [NotRequired]
+        private string _FinanceFullno;
+
+        [ColumnName("RefDate")]
+        [ShowInList]
+        [Searchable]
+        [TerminologyCode("LBLHRREFDATE")]
+        [DefaultToday]
+        private DateTime _RefDate;
+
+        [ColumnName("PolicyTypeCode")]
+        [TerminologyCode("LBLPOLICYTYPE")]
+        [NonVisible]
+        [UseValueField]
+        [NotInEdit]
+        [Constant("MEMBERPOLICYTYPE")]
+        private int _PolicyTypeCode;
+
+        [ColumnName("PolicyTypeName")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [TerminologyCode("LBLPOLICYTYPE")]
+        private string _PolicyTypeName;
+
+        [ColumnName("ProductionSource")]
+        [TerminologyCode("Source")]
+        [NonVisible]
+        [UseValueField]
+        [NotInEdit]
+        [NotRequired]
+        [Constant("PRODUCTIONSOURCE")]
+        private int _ProductionSourceCode;
+
+        [ColumnName("ProductionSourceName")]
+        [NonUpdate()]
+        [ShowInList]
+        [NotRequired]
+        [Searchable]
+        [TerminologyCode("Source")]
+        private string _ProductionSourceName;
+
+        public int ProductionSourceCode
+        {
+            get { return _ProductionSourceCode; }
+            set { _ProductionSourceCode = value; PropertyHasChanged(); }
+        }
+        public string ProductionSourceName
+        {
+            get { return _ProductionSourceName; }
+            set { _ProductionSourceName = value; PropertyHasChanged(); }
+        }
+
+
+        [ColumnName("ProductionBatchCode")]
+        [TerminologyCode("Batch No")]
+        [NonVisible]
+        [UseValueField]
+        [NotRequired]
+        [NotInEdit]
+        [DropDownSourceType(typeof(SBS.Business.Objects.HumanResource.NGI.DropDown.DDProductionBatch))]
+        private long _ProductionBatchCode;
+
+        [ColumnName("BatchNo")]
+        [NonUpdate()]
+        [ShowInList]
+        [NotRequired]
+        [Searchable]
+        [TerminologyCode("Batch No")]
+        private string _ProductionBatchName;
+
+        public long ProductionBatchCode
+        {
+            get { return _ProductionBatchCode; }
+            set { _ProductionBatchCode = value; PropertyHasChanged(); }
+        }
+        public string ProductionBatchName
+        {
+            get { return _ProductionBatchName; }
+            set { _ProductionBatchName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("POLICYCODE")]
+        [TerminologyCode("LBLPOLICYID")]
+        [NonVisible]
+        [UseValueField]
+        [FixSize]
+        [DropDownSourceType(typeof(SBS.Business.Objects.HumanResource.NGI.DropDown.DDPolicyFinanceList), 400, 150, "LBLBATCHNO,LBLPOLICYID,LBLDEPRECIATIONPOLICYNAME,LBLEDUSTARTDATE,LBLEDUENDDATE", "PolicyId")]
+        [ComboFill("PolicyName", "Startdate", "Enddate", "AgentName", "BrokerName", "GroupName", "MemberName", "NewBillingTypeName")]
+        private long _PolicyIdCode;
+
+        [ColumnName("POLICYID")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [MaxLength(100)]
+        [TerminologyCode("LBLPOLICYID")]
+        private string _PolicyIdName;
+
+        [ColumnName("POLICYNAME")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [NonEdit]
+        [NotRequired]
+        [MaxLength(100)]
+        [TerminologyCode("LBLDEPRECIATIONPOLICYNAME")]
+        private string _PolicyName;
+
+        [ColumnName("individualPolicyCode")]
+        [NonVisible]
+        [UseValueField]
+        [FixSize]
+        [TerminologyCode("LBLINDIVIDUALPOLICYID")]
+        [DropDownSourceType(typeof(SBS.Business.Objects.HumanResource.NGI.DropDown.DDIndPolicyFinance), 400, 150, "LBLPOLICYID,LBLDEPRECIATIONPOLICYNAME,LBLEDUSTARTDATE,LBLEDUENDDATE")]
+        [ComboFill("PolicyName", "Startdate", "Enddate", "AgentName", "BrokerName", "GroupName", "MemberName", "NewBillingTypeName")]
+        private long _IPPolicyIDCode;
+
+        [ColumnName("IPPolicyID")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [MaxLength(100)]
+        [TerminologyCode("LBLINDIVIDUALPOLICYID")]
+        private string _IPPolicyIDName;
+
+        [ColumnName("Startdate")]
+        [NonUpdate()]
+        [NonEdit]
+        [ShowInList, Searchable, Width(30)]
+        [NotRequired]
+        [TerminologyCode("LBLPOLICYSTARTDATE")]
+        private DateTime _Startdate;
+
+        [ColumnName("Enddate")]
+        [NonUpdate()]
+        [NonEdit]
+        [ShowInList, Searchable, Width(30)]
+        [TerminologyCode("LBLPOLICYENDDATE")]
+        [NotRequired]
+        private DateTime _Enddate;
+
+        [ColumnName("AddPremiumTotal")]
+        [TerminologyCode("RL_INVADDITIONTOTAL")]
+        [MaxValue(999999999999999.99)]
+        [DecimalPrecision(2)]
+        [DefaultValue(null)]
+        [NotRequired]
+        [NonEdit]
+        [ShowInList]
+        private double _AddPremiumTotal;
+
+        [ColumnName("DeletePremiumTotal")]
+        [TerminologyCode("LBLREFUNDTOTAL")]
+        [DefaultValue(null)]
+        [MaxValue(999999999999999.99)]
+        [DecimalPrecision(2)]
+        [NotRequired]
+        [NonEdit]
+        [ShowInList]
+        private double _DeletePremiumTotal;
+
+        [ColumnName("Total")]
+        [TerminologyCode("LBLNETTOTAL")]
+        [MaxValue(999999999999999.99)]
+        [DecimalPrecision(2)]
+        [DefaultValue(null)]
+        [NotRequired]
+        [NonEdit]
+        [ShowInList]
+        private double _Total;
+
+        [ColumnName("BillingTypeName")]
+        [TerminologyCode("LBLBILLINGTYPE")]
+        [NonVisible]
+        [Width(30)]
+        [NotRequired]
+        [NonEdit]
+        private string _NewBillingTypeName;
+
+        public string NewBillingTypeName
+        {
+            get { return _NewBillingTypeName; }
+            set { _NewBillingTypeName = value; PropertyHasChanged(); }
+        }
+
+
+        [ColumnName("BillingType")]
+        [TerminologyCode("LBLNEWBILLINGTYPE")]
+        [Constant("ENDORSEMENTBILLINGTYPE")]
+        [NonVisible]
+        [FixSize]
+        [NotRequired]
+        [UseValueField]
+        private int _OldBillingTypeCode;
+
+        [ColumnName("OldBillingTypeName")]
+        [TerminologyCode("LBLNEWBILLINGTYPE")]
+        [ShowInList]
+        [Width(30)]
+        [Searchable]
+        [NotRequired]
+        [NonUpdate]
+        private string _OldBillingTypeName;
+
+        public int OldBillingTypeCode
+        {
+            get { return _OldBillingTypeCode; }
+            set { _OldBillingTypeCode = value; PropertyHasChanged(); }
+        }
+
+        public string OldBillingTypeName
+        {
+            get { return _OldBillingTypeName; }
+            set { _OldBillingTypeName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("AgentName")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [NonEdit]
+        [NotRequired]
+        [MaxLength(30)]
+        [TerminologyCode("LBLAGENTNAME")]
+        private string _AgentName;
+
+        public string AgentName
+        {
+            get { return _AgentName; }
+            set { _AgentName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("BrokerName")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [NonEdit]
+        [NotRequired]
+        [MaxLength(30)]
+        [TerminologyCode("LBLBROKERNAME")]
+        private string _BrokerName;
+
+        public string BrokerName
+        {
+            get { return _BrokerName; }
+            set { _BrokerName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("GroupName")]
+        [TerminologyCode("LBLGROUPNAME")]
+        [NonUpdate]
+        [ShowInList]
+        [Searchable]
+        [NonEdit]
+        [NotRequired]
+        [Width(20)]
+        private string _GroupName;
+
+
+        public string GroupName
+        {
+            get { return _GroupName; }
+            set { _GroupName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("MemberName")]
+        [ShowInList]
+        [Searchable]
+        [MaxLength(100)]
+        [Width(30)]
+        [NonUpdate]
+        [NotRequired]
+        [NonEdit]
+        [CharacterCasing(CharacterCasingType.UpperCase)]
+        [TerminologyCode("LBLMEMBERNAME")]
+        private string _Member_Name;
+
+        public string Member_Name
+        {
+            get { return _Member_Name; }
+            set { _Member_Name = value; PropertyHasChanged(); }
+        }
+
+
+
+        [ColumnName("AUTHORIZEDSTATUS")]
+        [NonVisible]
+        [DefaultValue(0)]
+        [TerminologyCode("NGIAUTHORIZEDSTATUS")]
+        [Constant("AUTHORIZEDSTATUS")]
+        private int _AuthorizedStatusCode;
+
+        [ColumnName("AuthorizedStatusName")]
+        [TerminologyCode("NGIAUTHORIZEDSTATUS")]
+        [NonUpdate]
+        private string _AuthorizedStatusName;
+
+        [ColumnName("ReverseEndorsementCode")]
+        [NonVisible]
+        private long _ReverseEndorsementCode;
+
+        public long ReverseEndorsementCode
+        {
+            get { return _ReverseEndorsementCode; }
+            set { _ReverseEndorsementCode = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("ApprovedDate")]
+        [NonUpdate()]
+        [NonEdit]
+        [ShowInList]
+        [Searchable]
+        [Width(30)]
+        [TerminologyCode("LBLAPPROVEDDATE")]
+        [NotRequired]
+        private DateTime _ApprovedDate;
+
+        public string ApprovedDate
+        {
+            get { return _ApprovedDate.ToString(Helper.DateFormat); }
+            set { _ApprovedDate = Utilities.ConvertToHelperDate(value); PropertyHasChanged(); }
+        }
+
+        [ColumnName("BranchCode")]
+        [TerminologyCode("LBLBRANCH")]
+        [FixSize]
+        [NonVisible]
+        [UseValueField]
+        [DropDownSourceType(typeof(SBS.Business.Objects.HumanResource.DropDown.DDHROrganisationList))]
+        private long _BranchCode;
+
+        [ColumnName("BranchName")]
+        [TerminologyCode("LBLBRANCH")]
+        [NonUpdate]
+        [ShowInList]
+        [Searchable]
+        [Width(20)]
+        private string _BranchName;
+
+
+        public long BranchCode
+        {
+            get { return _BranchCode; }
+            set { _BranchCode = value; PropertyHasChanged(); }
+        }
+
+        public string BranchName
+        {
+            get { return _BranchName; }
+            set { _BranchName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("NoofInstallment")]
+        [MaxValue(20)]
+        [Searchable]
+        [Null]
+        [DefaultValue(null)]
+        [TerminologyCode("LBLNOOFINSTALLMENT")]
+        private long _NoofInstallment;
+
+        public long NoofInstallment
+        {
+            get { return _NoofInstallment; }
+            set { _NoofInstallment = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("LoadAfterSave")]
+        [TerminologyCode("LBLLOADAFTERSAVE")]
+        [CheckBox]
+        [NotRequired]
+        [NonVisible]
+        private int _LoadAfterSave;
+
+        [ColumnName("AdministeredByName")]
+        [NonUpdate()]
+        [ShowInList]
+        [Searchable]
+        [TerminologyCode("LBLOWNEREDBY")]
+        private string _OwnerTypeName;
+
+        public string OwnerTypeName
+        {
+            get { return _OwnerTypeName; }
+            set { _OwnerTypeName = value; PropertyHasChanged(); }
+        }
+
+        [ColumnName("CREATEDIN")]
+        [NonVisible]
+        private int _CreatedIn;
+
+        [ColumnName("CREATEDON")]
+        [NonVisible]
+        private DateTime _CreatedOn;
+
+        [ColumnName("CREATEDBY")]
+        [NonVisible]
+        private long _CreatedBy;
+
+        [ColumnName("LASTMODIFIEDON")]
+        [NonVisible]
+        private DateTime _LastmodifiedOn;
+
+        [ColumnName("LASTMODIFIEDBY")]
+        [NonVisible]
+        private long _LastmodifiedBy;
+
+        [ColumnName("COMPANYCODE")]
+        [NonVisible]
+        private long _CompanyCode;
+
+        [ColumnName("LOCATIONCODE")]
+        [NonVisible]
+        private long _LocationCode;
+
+        [ColumnName("DEACTIVATEDON")]
+        [NonVisible]
+        private DateTime _DeactivatedOn;
+
+        [ColumnName("DEACTIVATEDBY")]
+        [NonVisible]
+        private long _DeactivatedBy;
+
+        [ColumnName("SERIALNO")]
+        [NonVisible]
+        private long _SerialNo;
+
+        protected override object GetIdValue() { return _ID; }
+
+        protected override void AddInstanceBusinessRules()
+        {
+            base.AddInstanceBusinessRules();  
+            base.ValidationRules.AddInstanceRule(new RuleHandler(this.JVPosing), "AuthorizedStatusCode", ScreenMode.NewMode | ScreenMode.EditMode); 
+        }
+         
+
+        public bool JVPosing(object Target, RuleArgs Args)
+        {
+            PolicyFinancePosting CurObj = Target as PolicyFinancePosting;
+            List<string> SQLList = new List<string>();
+            List<long> SGroupCodes = new List<long>();
+            List<double> SGroupAmount = new List<double>();
+            List<long> SCommitionToCode = new List<long>();
+            List<double> SCommitionToAmount = new List<double>();
+            List<long> SReInsuresrToCode = new List<long>();
+            List<double> SReInsuresrToAmount = new List<double>();
+
+            if (CurObj.AuthorizedStatusCode == 1)//Approved
+            {
+                int MemCount = 0;
+                foreach (PolicyFinancePostingDtl Dtl in CurObj.PolicyFinancePostingDtlList)
+                {
+                    if (Dtl.IsDeleted) continue;
+                    MemCount++;
+                }
+                if (MemCount == 0)
+                {
+                    throw new Exception("This Endoresment don't have any Member Detail. Please save the record first ! ");
+                }
+                 
+                Business<NGIPolicyList, NGIPolicy> PolicyBus = new Business<NGIPolicyList, NGIPolicy>();
+                NGIPolicy Policy = PolicyBus.GetById(CurObj.PolicyIdCode, false);
+
+                Business<NGIIndividualPoliciesList, NGIIndividualPolicies> IPPolicyBus = new Business<NGIIndividualPoliciesList, NGIIndividualPolicies>();
+                NGIIndividualPolicies IndPol = IPPolicyBus.GetById(CurObj.IPPolicyIDCode, false);
+
+                int PolicyType = 0, RefType = 0; long PolicyCode = 0, RefCode = 0;
+
+                long CommissionBrokerCode = 0, CommissionInsurerCode = 0, CommissionAgentCode = 0; long CommissionTo = 0;
+                double BrokerAmount = 0, InsurerAmount = 0, AgentAmount = 0, CommissionToAmount = 0;
+
+                long PremiumBrokerCode = 0, PremiumMemberCode = 0, PremiumGroupCode = 0, PremiumAgentCode = 0;
+                double PremiumBrokerAmount = 0, PremiumMemberAmount = 0, PremiumGroupAmount = 0, PremiumAgentAmount = 0;
+                Business<JVPostingList, JVPosting> JVBus = new Business<JVPostingList, JVPosting>();
+                JVPostingList JVPostList = new JVPostingList();
+
+                double FinalPremium = 0, FinalCommisionPremium = 0;
+
+                int BillingTypeOption = CurObj.OldBillingTypeCode;
+
+                if (BillingTypeOption == 0)
+                {
+                    BillingTypeOption = (CurObj.PolicyTypeCode == 1 ? Policy.BillingTypeCode : IndPol.BillingTypeCode);
+                }
+                else
+                {
+                    BillingTypeOption = (BillingTypeOption == 4 ? 0 : BillingTypeOption);
+                }
+
+                foreach (PolicyFinancePostingDtl PrimiumDet in CurObj.PolicyFinancePostingDtlList)//Premium
+                {
+                    FinalPremium += (1 * PrimiumDet.AddPremium) + (-1 * PrimiumDet.DeletePremium);
+
+                    if (CurObj.PolicyTypeCode == 1)//Policy
+                    {
+                        if (BillingTypeOption == 5)
+                        {
+                            Business<HumanResource.NGI.SetUp.GroupMasterList, HumanResource.NGI.SetUp.GroupMaster> GrpBus = new Business<HumanResource.NGI.SetUp.GroupMasterList, HumanResource.NGI.SetUp.GroupMaster>();
+                            HumanResource.NGI.SetUp.GroupMaster GrpBo = GrpBus.GetById(PrimiumDet.GroupCode, false);
+                            if (GrpBo.ParentgroupCode != 0) PrimiumDet.GroupCode = GrpBo.ParentgroupCode;
+                        }
+
+                        if (SGroupCodes.IndexOf(PrimiumDet.GroupCode) < 0)
+                        {
+                            SGroupCodes.Add(PrimiumDet.GroupCode);
+                            SGroupAmount.Add((1 * PrimiumDet.AddPremium) + (-1 * PrimiumDet.DeletePremium));
+                        }
+                        else
+                        {
+                            SGroupAmount[SGroupCodes.IndexOf(PrimiumDet.GroupCode)] += (1 * PrimiumDet.AddPremium) + (-1 * PrimiumDet.DeletePremium);
+                        }
+                    }
+
+                    if (PrimiumDet.AddPremium > 0)
+                        SQLList.Add("UPDATE IM_MEMBERPOLICY SET FINANCEPOSTDONEFORADDITION=1 WHERE MEMBERPOLICYCODE=" + PrimiumDet.MemberPolicyCode + "");
+                    if (PrimiumDet.DeletePremium > 0)
+                        SQLList.Add("UPDATE IM_MEMBERPOLICY SET FINANCEPOSTDONEFORDELETION=1 WHERE MEMBERPOLICYCODE=" + PrimiumDet.MemberPolicyCode + "");
+                }
+
+
+
+                if (CurObj.PolicyTypeCode == 1)//policy
+                {
+                    PolicyCode = Policy.ID;
+                    RefType = 0;//Policy
+                    PolicyType = 0;//policy
+                    RefCode = CurObj.ID;
+
+                    if (BillingTypeOption == 0)//Agent
+                    {
+                        PremiumAgentCode = Policy.AgentCode;
+                        PremiumAgentAmount = FinalPremium;
+                    }
+                    else if (BillingTypeOption == 1)//Broker
+                    {
+                        PremiumBrokerCode = Policy.BrokerCode;
+                        PremiumBrokerAmount = FinalPremium;
+                    }
+                    else
+                    {
+                        PremiumGroupCode = Policy.GroupCode;
+                        PremiumGroupAmount = FinalPremium;
+                    }
+                    InsurerAmount = FinalPremium;
+                    CommissionInsurerCode = Policy.ReInsuranceCode;
+                }
+
+                if (CurObj.PolicyTypeCode == 2)//Ind Policy
+                {
+                    PolicyCode = IndPol.ID;
+                    RefType = 1;//ind Policy
+                    PolicyType = 1;
+                    RefCode = CurObj.ID;
+
+                    if (BillingTypeOption == 0)//Agent
+                    {
+                        PremiumAgentCode = IndPol.AgentCode;
+                        PremiumAgentAmount = FinalPremium;
+                    }
+                    else if (BillingTypeOption == 1)//Broker
+                    {
+                        PremiumBrokerCode = IndPol.BrokerCode;
+                        PremiumBrokerAmount = FinalPremium;
+                    }
+                    else
+                    {
+                        PremiumMemberCode = IndPol.MemberIDCode;
+                        PremiumMemberAmount = FinalPremium;
+                    }
+
+
+                }
+
+                #region Commision Posting
+                if (CurObj.PolicyTypeCode == 1)//policy
+                {
+                    CommissionBrokerCode = Policy.BrokerCode;
+                    CommissionAgentCode = Policy.AgentCode;
+                }
+                else
+                {
+                    CommissionBrokerCode = IndPol.BrokerCode;
+                    CommissionAgentCode = IndPol.AgentCode;
+                }
+                foreach (PolicyFinancePostingCommissionDtl CommsionDet in CurObj.PolicyFinancePostingCommissionDtlList)//Commision
+                {
+                    FinalCommisionPremium += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+
+                    if (CurObj.PolicyTypeCode == 1)//policy
+                    {
+                        //if (Policy.ReqSourceCode == 5)//Broker
+                        if (Policy.BrokerCode > 0 && CommsionDet.Comission_TypesCode == 0)//Broker
+                        {
+                            CommissionBrokerCode = Policy.BrokerCode;
+                            BrokerAmount += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+                        }
+                        else if (Policy.AgentCode > 0 && CommsionDet.Comission_TypesCode == 1)//Agent
+                        {
+                            CommissionAgentCode = Policy.AgentCode;
+                            AgentAmount += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+                        }
+                        else if (CommsionDet.Comission_TypesCode != 3 && CommsionDet.Comission_TypesCode != 0 && CommsionDet.Comission_TypesCode != 1)
+                        {
+
+                            if (SCommitionToCode.IndexOf(CommsionDet.CommissionTo) < 0)
+                            {
+                                SCommitionToCode.Add(CommsionDet.CommissionTo);
+                                SCommitionToAmount.Add((1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount));
+                            }
+                            else
+                            {
+                                SCommitionToAmount[SCommitionToCode.IndexOf(CommsionDet.CommissionTo)] += (1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount);
+                            }
+
+                        }
+
+                        if (CommsionDet.Comission_TypesCode == 3)//Insures
+                        {
+                            //CommissionInsurerCode = CommsionDet.CommissionTo;// Policy.ReInsuranceCode;
+                            //InsurerAmount += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+
+                            if (SReInsuresrToCode.IndexOf(CommsionDet.CommissionTo) < 0)
+                            {
+                                SReInsuresrToCode.Add(CommsionDet.CommissionTo);
+                                SReInsuresrToAmount.Add((1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount));
+                            }
+                            else
+                            {
+                                SReInsuresrToAmount[SReInsuresrToCode.IndexOf(CommsionDet.CommissionTo)] += (1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount);
+                            }
+                        }
+
+
+                    }
+                    if (CurObj.PolicyTypeCode == 2)//Ind policy
+                    {
+                        FinalCommisionPremium += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+
+                        if (IndPol.BrokerCode > 0 && CommsionDet.Comission_TypesCode == 0)//Broker
+                        {
+                            CommissionBrokerCode = IndPol.BrokerCode;
+                            BrokerAmount += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+                        }
+                        else if (IndPol.AgentCode > 0 && CommsionDet.Comission_TypesCode == 1)//Aent
+                        {
+                            CommissionAgentCode = IndPol.AgentCode;
+                            AgentAmount += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+                        }
+                        else if (CommsionDet.Comission_TypesCode != 3 && CommsionDet.Comission_TypesCode != 0 && CommsionDet.Comission_TypesCode != 1)
+                        {
+                            if (SCommitionToCode.IndexOf(CommsionDet.CommissionTo) < 0)
+                            {
+                                SCommitionToCode.Add(CommsionDet.CommissionTo);
+                                SCommitionToAmount.Add((1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount));
+                            }
+                            else
+                            {
+                                SCommitionToAmount[SCommitionToCode.IndexOf(CommsionDet.CommissionTo)] += (1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount);
+                            }
+                        }
+
+                        if (CommsionDet.Comission_TypesCode == 3)//Insures
+                        {
+                            //CommissionInsurerCode = CommsionDet.CommissionTo;//IndPol.ReInsuranceCode; // IndPol.ReInsuranceCode;
+                            //InsurerAmount += (CommsionDet.AdditionAmount - CommsionDet.RefundAmount);
+
+                            if (SReInsuresrToCode.IndexOf(CommsionDet.CommissionTo) < 0)
+                            {
+                                SReInsuresrToCode.Add(CommsionDet.CommissionTo);
+                                SReInsuresrToAmount.Add((1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount));
+                            }
+                            else
+                            {
+                                SReInsuresrToAmount[SReInsuresrToCode.IndexOf(CommsionDet.CommissionTo)] += ((1 * CommsionDet.AdditionAmount) + (-1 * CommsionDet.RefundAmount));
+                            }
+                        }
+                    }
+
+                }
+
+                #endregion
+
+                long Broker = (CommissionBrokerCode > 0 ? CommissionBrokerCode : PremiumBrokerCode);
+                long Agent = (CommissionAgentCode > 0 ? CommissionAgentCode : PremiumAgentCode);
+
+                Business<BrokerBillingDetailList, BrokerBillingDetail> BrokerBilBus = new Business<BrokerBillingDetailList, BrokerBillingDetail>();
+                BrokerBillingDetailList BrokerBilList = BrokerBilBus.GetByCriteria("Bil.BROKERCODE=" + Broker + " and Bil.ENDDATE is null ", false);
+
+                Business<AgentBillingList, AgentBilling> AgentBillingList = new Business<AgentBillingList, AgentBilling>();
+                AgentBillingList AgentBilList = AgentBillingList.GetByCriteria("Bil.AgentCode=" + Agent + " and Bil.ENDDATE is null ", false);
+
+                Business<MemberBillingList, MemberBilling> MemberBilBus = new Business<MemberBillingList, MemberBilling>();
+                MemberBillingList MemberBilList = MemberBilBus.GetByCriteria("Bil.MEMBER_CODE=" + PremiumMemberCode + "and Bil.ENDDATE is null ", false);
+
+                Business<InsuranceBillingList, InsuranceBilling> InsurerBilBus = new Business<InsuranceBillingList, InsuranceBilling>();
+                InsuranceBillingList InsurerBilList = InsurerBilBus.GetByCriteria("Bill.INSCODE=" + CommissionInsurerCode + "and Bill.EndDate is null ", false);
+
+                Business<CreditModuleDetailList, CreditModuleDetail> CreBus = new Business<CreditModuleDetailList, CreditModuleDetail>();
+
+                int JVPostCnt = 1;
+                long TPAUserCode = Convert.ToInt64(Helper.UserCode);
+
+                #region Reinsurer
+
+
+                /*                 
+                #region Facultative In
+                if (Policy.SubReinsurerTypeCode == 3)
+                {
+                    Business<PolicyFacultativeOutList, PolicyFacultativeOut> FacultativeBus = new Business<PolicyFacultativeOutList, PolicyFacultativeOut>();
+                    PolicyFacultativeOutList FacultativeList = FacultativeBus.GetByCriteria("IMPF.PolicyCode =" + Policy.ID, false);
+
+
+                    Business<PolicyCommissionDetailList, PolicyCommissionDetail> CommissionBus = new Business<PolicyCommissionDetailList, PolicyCommissionDetail>();
+                    PolicyCommissionDetailList CommissionList = CommissionBus.GetByCriteria("PCO.PolicyCode =" + Policy.ID, false);
+
+                    Business<MemberPolicyPremiumDetailList, MemberPolicyPremiumDetail> PremiumDtl = new Business<MemberPolicyPremiumDetailList, MemberPolicyPremiumDetail>();
+                    Business<MemberPolicyRefundablePremiumDtlList, MemberPolicyRefundablePremiumDtl> RefundDtl = new Business<MemberPolicyRefundablePremiumDtlList, MemberPolicyRefundablePremiumDtl>();
+                    Business<SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsNameList, SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsName> BenDtl = new Business<DropDown.DDBenefitsNameList, DropDown.DDBenefitsName>();
+
+                    double InsurerComission = 0.0;
+                    double AddPremium = 0.0, RefundPremium = 0.0; 
+                    foreach (PolicyFacultativeOut FacBus in FacultativeList)
+                    {
+                        if (FacBus.PremiumTypeCode != 3)
+                        {
+                            foreach (PolicyFinancePostingDtl PosDtl in CurObj.PolicyFinancePostingDtlList)
+                            {
+                                MemberPolicyPremiumDetailList PremiumDtlList = PremiumDtl.GetByCriteria("PCO.MemberPolicyCode = " + PosDtl.MemberPolicyCode, true);
+
+                                foreach (MemberPolicyPremiumDetail Pdtl in PremiumDtlList)
+                                {
+                                    SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsNameList BenList = BenDtl.GetByCriteria("Ben.Benefit_Code = " + Pdtl.BenefitIDCode, true);
+                                    for (int i = 0; i < BenList.Count; i++)
+                                    {
+                                        if (FacBus.PremiumTypeCode == BenList[i].PremiumType)
+                                        {
+                                            AddPremium += Pdtl.Premium_Value;
+                                        }
+                                    }
+                                }
+
+                                MemberPolicyRefundablePremiumDtlList RefundDtlList = RefundDtl.GetByCriteria("PCO.MemberPolicyCode = " + PosDtl.MemberPolicyCode, true);
+
+                                foreach (MemberPolicyRefundablePremiumDtl Pdtl in RefundDtlList)
+                                {
+                                    SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsNameList BenList = BenDtl.GetByCriteria("Ben.Benefit_Code = " + Pdtl.BenefitIDCode, true);
+                                    for (int i = 0; i < BenList.Count; i++)
+                                    {
+                                        if (FacBus.PremiumTypeCode == BenList[i].PremiumType)
+                                        {
+                                            RefundPremium += Pdtl.Premium_Value;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        InsurerAmount = AddPremium - RefundPremium;
+
+                        foreach (PolicyCommissionDetail PolDet in CommissionList)
+                        {
+                            if (PolDet.Calc_MethodCode == 1)
+                            {
+                                InsurerComission += (InsurerAmount * FacBus.FacultativePercentage / 100) * (PolDet.DefaultValue / 100);
+                            }
+                        }
+                        InsurerAmount = (InsurerAmount * FacBus.FacultativePercentage / 100) - InsurerComission;
+                        Business<TreatyHdrList,TreatyHdr> THdr = new Business<TreatyHdrList,TreatyHdr>();
+                        TreatyHdr THList = THdr.GetById(FacBus.TreatyHdrCode,true);
+                        foreach (TreatyDtl Dtl in THList.TreatyDtlList)
+                        {
+                            double SubInsurerAmount = 0.0,SubInsurerCommission = 0.0;
+                            SubInsurerAmount = (InsurerAmount * Dtl.FacultativePercentage / 100);
+                            foreach (PolicyCommissionDetail PolDet in CommissionList)
+                            {
+                                if (PolDet.Calc_MethodCode == 1)
+                                {
+                                    SubInsurerCommission += (SubInsurerAmount * Dtl.FacultativePercentage / 100);
+                                }
+                            }
+
+                            SubInsurerAmount = SubInsurerAmount - SubInsurerCommission;
+                            Business<InsuranceBillingList, InsuranceBilling> BilBus = new Business<InsuranceBillingList, InsuranceBilling>();
+                            InsuranceBillingList BilList = InsurerBilBus.GetByCriteria("Bill.INSCODE=" + Dtl.ReInsuranceCode + "and Bill.EndDate is null ", false);
+
+                            JVPosting JVPremiumFacultativeNote = JVBus.CreateBusinessObject();
+                            JVPremiumFacultativeNote.ID = JVPostCnt;
+                            JVPremiumFacultativeNote.SerialNo = JVPostCnt;
+                            JVPremiumFacultativeNote.SourceCode = 1;//Underwritting
+                            JVPremiumFacultativeNote.JvPremiumType = 0;//Premium
+                            JVPremiumFacultativeNote.PolicyType = PolicyType;//Policy
+                            JVPremiumFacultativeNote.RefTypeCode = RefType;//Policy
+                            JVPremiumFacultativeNote.RefCode = RefCode;
+                            JVPremiumFacultativeNote.PolicyCode = PolicyCode;
+                            JVPremiumFacultativeNote.MemberTypeCode = 8;//Reinsurer
+                            JVPremiumFacultativeNote.ReinsurerCode = FacBus.TreatyHdrCode;
+                            JVPremiumFacultativeNote.Amount = (SubInsurerAmount > 0 ? SubInsurerAmount : SubInsurerAmount * -1);
+                            JVPremiumFacultativeNote.MemoTypeCode = (SubInsurerAmount > 0 ? 1 : 0);//0-Credit Note, 1 Debit 
+                            JVPremiumFacultativeNote.AccountNo = BilList[0].AccountNumber;
+                            JVPremiumFacultativeNote.CurrencyCode = BilList[0].CurrencyCode;
+                            JVPremiumFacultativeNote.BinCode = BilList[0].INSPinCode;
+                            JVPostList.Add(JVPremiumFacultativeNote);
+                            JVPostCnt++;
+                        }
+
+
+                    }
+                }
+                #endregion
+
+                #region Facultative Out
+                if (Policy.SubReinsurerTypeCode == 4)
+                {
+                    Business<PolicyFacultativeOutList, PolicyFacultativeOut> FacultativeBus = new Business<PolicyFacultativeOutList, PolicyFacultativeOut>();
+                    PolicyFacultativeOutList FacultativeList = FacultativeBus.GetByCriteria("IMPF.PolicyCode =" + Policy.ID, false);
+
+
+                    Business<MemberPolicyPremiumDetailList, MemberPolicyPremiumDetail> PremiumDtl = new Business<MemberPolicyPremiumDetailList, MemberPolicyPremiumDetail>();
+                    Business<MemberPolicyRefundablePremiumDtlList, MemberPolicyRefundablePremiumDtl> RefundDtl = new Business<MemberPolicyRefundablePremiumDtlList, MemberPolicyRefundablePremiumDtl>();
+                    Business<SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsNameList, SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsName> BenDtl = new Business<DropDown.DDBenefitsNameList, DropDown.DDBenefitsName>();
+
+                    double InsurerComission = 0.0;
+                    double AddPremium = 0.0, RefundPremium = 0.0;
+
+                    foreach (PolicyFacultativeOut FacBus in FacultativeList)
+                    {
+
+                        if (FacBus.PremiumTypeCode != 3)
+                        {
+                            foreach (PolicyFinancePostingDtl PosDtl in CurObj.PolicyFinancePostingDtlList)
+                            {
+                                MemberPolicyPremiumDetailList PremiumDtlList = PremiumDtl.GetByCriteria("PCO.MemberPolicyCode = " + PosDtl.MemberPolicyCode, true);
+
+                                foreach (MemberPolicyPremiumDetail Pdtl in PremiumDtlList)
+                                {
+                                    SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsNameList BenList = BenDtl.GetByCriteria("Ben.Benefit_Code = " + Pdtl.BenefitIDCode, true);
+                                    for (int i = 0; i < BenList.Count; i++)
+                                    {
+                                        if (FacBus.PremiumTypeCode == BenList[i].PremiumType)
+                                        {
+                                            AddPremium += Pdtl.Premium_Value;
+                                        }
+                                    }
+                                }
+
+                                MemberPolicyRefundablePremiumDtlList RefundDtlList = RefundDtl.GetByCriteria("PCO.MemberPolicyCode = " + PosDtl.MemberPolicyCode, true);
+
+                                foreach (MemberPolicyRefundablePremiumDtl Pdtl in RefundDtlList)
+                                {
+                                    SBS.Business.Objects.HumanResource.NGI.DropDown.DDBenefitsNameList BenList = BenDtl.GetByCriteria("Ben.Benefit_Code = " + Pdtl.BenefitIDCode, true);
+                                    for (int i = 0; i < BenList.Count; i++)
+                                    {
+                                        if (FacBus.PremiumTypeCode == BenList[i].PremiumType)
+                                        {
+                                            RefundPremium += Pdtl.Premium_Value;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        InsurerAmount = AddPremium - RefundPremium;
+
+                        InsurerAmount = (InsurerAmount * FacBus.FacultativePercentage / 100);
+                        InsurerComission = InsurerAmount * FacBus.FacultativeCommission / 100;
+
+                        Business<TreatyHdrList,TreatyHdr> THdr = new Business<TreatyHdrList,TreatyHdr>();
+                        TreatyHdr THList = THdr.GetById(FacBus.TreatyHdrCode,true);
+                        foreach (TreatyDtl Dtl in THList.TreatyDtlList)
+                        {
+                            double SubReinsurerAmount = 0.0, SubReinsurerCommission = 0.0;
+                            Business<InsuranceBillingList, InsuranceBilling> BilBus = new Business<InsuranceBillingList, InsuranceBilling>();
+                            InsuranceBillingList BilList = InsurerBilBus.GetByCriteria("Bill.INSCODE=" + Dtl.ReInsuranceCode + "and Bill.EndDate is null ", false);
+
+
+                            SubReinsurerAmount = (InsurerAmount * Dtl.FacultativePercentage / 100);
+                            SubReinsurerCommission = SubReinsurerAmount * Dtl.FacultativeCommission / 100;
+                            if (Dtl.FacultativeCommission > 0)
+                            {
+                                JVPosting JVComissionFacultativeNote = JVBus.CreateBusinessObject();
+                                JVComissionFacultativeNote.ID = JVPostCnt;
+                                JVComissionFacultativeNote.SerialNo = JVPostCnt;
+                                JVComissionFacultativeNote.SourceCode = 1;//Underwritting
+                                JVComissionFacultativeNote.JvPremiumType = 1;//Comission
+                                JVComissionFacultativeNote.PolicyType = PolicyType;//Policy
+                                JVComissionFacultativeNote.RefTypeCode = RefType;//Policy
+                                JVComissionFacultativeNote.RefCode = RefCode;
+                                JVComissionFacultativeNote.PolicyCode = PolicyCode;
+                                JVComissionFacultativeNote.MemberTypeCode = 8;//Reinsurer
+                                JVComissionFacultativeNote.ReinsurerCode = FacBus.TreatyHdrCode;
+                                JVComissionFacultativeNote.Amount = (SubReinsurerCommission > 0 ? SubReinsurerCommission : SubReinsurerCommission * -1);
+                                JVComissionFacultativeNote.MemoTypeCode = (SubReinsurerCommission > 0 ? 1 : 0);//0-Credit Note, 1 Debit 
+                                JVComissionFacultativeNote.AccountNo = BilList[0].AccountNumber;
+                                JVComissionFacultativeNote.CurrencyCode = BilList[0].CurrencyCode;
+                                JVComissionFacultativeNote.BinCode = BilList[0].INSPinCode;
+                                JVPostList.Add(JVComissionFacultativeNote);
+                                JVPostCnt++;
+                            }
+
+
+
+                            JVPosting JVPremiumFacultativeNote = JVBus.CreateBusinessObject();
+                            JVPremiumFacultativeNote.ID = JVPostCnt;
+                            JVPremiumFacultativeNote.SerialNo = JVPostCnt;
+                            JVPremiumFacultativeNote.SourceCode = 1;//Underwritting
+                            JVPremiumFacultativeNote.JvPremiumType = 0;//Premium
+                            JVPremiumFacultativeNote.PolicyType = PolicyType;//Policy
+                            JVPremiumFacultativeNote.RefTypeCode = RefType;//Policy
+                            JVPremiumFacultativeNote.RefCode = RefCode;
+                            JVPremiumFacultativeNote.PolicyCode = PolicyCode;
+                            JVPremiumFacultativeNote.MemberTypeCode = 8;//Reinsurer
+                            JVPremiumFacultativeNote.ReinsurerCode = FacBus.TreatyHdrCode;
+                            JVPremiumFacultativeNote.Amount = (SubReinsurerAmount > 0 ? SubReinsurerAmount : SubReinsurerAmount * -1);
+                            JVPremiumFacultativeNote.MemoTypeCode = (SubReinsurerAmount > 0 ? 0 : 1);//0-Credit Note, 1 Debit 
+                            JVPremiumFacultativeNote.AccountNo = BilList[0].AccountNumber;
+                            JVPremiumFacultativeNote.CurrencyCode = BilList[0].CurrencyCode;
+                            JVPremiumFacultativeNote.BinCode = BilList[0].INSPinCode;
+                            JVPostList.Add(JVPremiumFacultativeNote);
+                            JVPostCnt++;
+
+                        } 
+
+                    }
+                }
+                #endregion
+
+                */
+                if (Policy.SubReinsurerTypeCode != 3)
+                {
+                    #region Policy
+
+
+                    #region CredtiNote
+                    if (CommissionBrokerCode > 0)
+                    {
+                        JVPosting JVBrkCommissionNote = JVBus.CreateBusinessObject();
+
+                        JVBrkCommissionNote.ID = JVPostCnt;
+                        JVBrkCommissionNote.SerialNo = JVPostCnt;
+                        JVBrkCommissionNote.SourceCode = 1;//Underwritting
+                        JVBrkCommissionNote.JvPremiumType = 1;// (BrokerAmount > 0 ? 1 : 0);//0-Premiun -- old code , commented on 3/1/2015 , compassemp
+                        JVBrkCommissionNote.PolicyType = PolicyType;//Policy
+                        JVBrkCommissionNote.RefTypeCode = RefType;//Policy
+                        JVBrkCommissionNote.RefCode = RefCode;
+                        JVBrkCommissionNote.PolicyCode = PolicyCode;
+                        JVBrkCommissionNote.MemberTypeCode = 1;//Broker
+                        JVBrkCommissionNote.BrokerCode = CommissionBrokerCode;
+                        JVBrkCommissionNote.Amount = (BrokerAmount > 0 ? BrokerAmount : BrokerAmount * -1);
+                        JVBrkCommissionNote.MemoTypeCode = (BrokerAmount > 0 ? 0 : 1);//0-Credit Note, 1 Debit
+                        if (BrokerBilList.Count > 0)
+                        {
+                            CreditModuleDetailList CreList = CreBus.GetByCriteria("Dtl.BrokerCode = " + CommissionBrokerCode + " and Dtl.PinCode = " + BrokerBilList[0].ProviderPinCode + "", true);
+                            if (CreList.Count > 0)
+                            {
+                                if (CreList[0].ISBlackList)
+                                { 
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING',"+ TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Broker Name : " + BrokerBilList[0].BrokerName + "','Broker is BlackList' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Broker is BlackListed ");
+                                }
+                                double CreditTotal = 0.0;
+                                CreditTotal = CreList[0].OutstandingAmount + BrokerAmount;
+                                if (CreList[0].CreditLimit < CreditTotal && CreList[0].CreditLimit > 0)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Broker Name : " + BrokerBilList[0].BrokerName + "','Outstanding Amount is More than the Credit Limit ! ' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Outstanding Amount is More than the Credit Limit ! ");
+                                }
+                            }
+
+
+                            JVBrkCommissionNote.AccountNo = BrokerBilList[0].AccountNumber;
+                            JVBrkCommissionNote.CurrencyCode = BrokerBilList[0].CurrencyCode;
+                            JVBrkCommissionNote.BinCode = BrokerBilList[0].ProviderPinCode;
+                        }
+                        JVPostList.Add(JVBrkCommissionNote);
+                        JVPostCnt++;
+                    }
+                    /*
+                    if (CommissionInsurerCode > 0 && InsurerAmount != 0)
+                    {
+                        JVPosting JVInsurerCommissionNote = JVBus.CreateBusinessObject();
+
+                        JVInsurerCommissionNote.ID = JVPostCnt;
+                        JVInsurerCommissionNote.SerialNo = JVPostCnt;
+                        JVInsurerCommissionNote.SourceCode = 1;//Underwritting
+                        JVInsurerCommissionNote.JvPremiumType = 1;//Commision
+                        JVInsurerCommissionNote.PolicyType = PolicyType;//Policy
+                        JVInsurerCommissionNote.RefTypeCode = RefType;//Policy
+                        JVInsurerCommissionNote.RefCode = RefCode;
+                        JVInsurerCommissionNote.PolicyCode = PolicyCode;
+                        JVInsurerCommissionNote.MemberTypeCode = 6;//Insure
+                        JVInsurerCommissionNote.InsurerCode = CommissionInsurerCode;
+                        JVInsurerCommissionNote.Amount = (InsurerAmount > 0 ? InsurerAmount : InsurerAmount * -1);
+                        JVInsurerCommissionNote.MemoTypeCode = (InsurerAmount > 0 ? 0 : 1);//0-Credit Note, 1 Debit
+                        if (InsurerBilList.Count > 0)
+                        {
+                            JVInsurerCommissionNote.AccountNo = InsurerBilList[0].AccountNumber;
+                            JVInsurerCommissionNote.CurrencyCode = InsurerBilList[0].CurrencyCode;
+                            JVInsurerCommissionNote.BinCode = InsurerBilList[0].INSPinCode;
+                        }
+                        JVPostList.Add(JVInsurerCommissionNote);
+                        JVPostCnt++;
+                    }
+                    */
+                    if (CommissionAgentCode > 0)
+                    {
+                        JVPosting JVAgntCommissionNote = JVBus.CreateBusinessObject();
+
+                        JVAgntCommissionNote.ID = JVPostCnt;
+                        JVAgntCommissionNote.SerialNo = JVPostCnt;
+                        JVAgntCommissionNote.SourceCode = 1;//Underwritting
+                        JVAgntCommissionNote.JvPremiumType = 1;//Commision
+                        JVAgntCommissionNote.PolicyType = PolicyType;//Policy
+                        JVAgntCommissionNote.RefTypeCode = RefType;//Policy
+                        JVAgntCommissionNote.RefCode = RefCode;
+                        JVAgntCommissionNote.PolicyCode = PolicyCode;
+                        JVAgntCommissionNote.MemberTypeCode = 0;//Agent
+                        JVAgntCommissionNote.AgentCode = CommissionAgentCode;
+                        JVAgntCommissionNote.Amount = (AgentAmount > 0 ? AgentAmount : AgentAmount * -1);
+                        JVAgntCommissionNote.MemoTypeCode = (AgentAmount > 0 ? 0 : 1);//0-Credit Note, 1 Debit
+
+                        if (AgentBilList.Count > 0)
+                        {
+                            CreditModuleDetailList CreList = CreBus.GetByCriteria("Dtl.AgentCode = " + CommissionAgentCode + " and Dtl.PinCode = " + AgentBilList[0].PinCode + "", true);
+                            if (CreList.Count > 0)
+                            { 
+                                if (CreList[0].ISBlackList)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Agent Name : " + AgentBilList[0].AgentName + "','Agent is BlackList' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Agent is Blacklisted ! ");
+                                }
+                                double CreditTotal = 0.0;
+                                CreditTotal = CreList[0].OutstandingAmount + BrokerAmount;
+                                if (CreList[0].CreditLimit < CreditTotal && CreList[0].CreditLimit > 0)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Agent Name : " + AgentBilList[0].AgentName + "','Outstanding Amount is More than the Credit Limit ! ' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Outstanding Amount is More than the Credit Limit ! ");
+                                }
+                            }
+                            JVAgntCommissionNote.AccountNo = AgentBilList[0].AccountNumber;
+                            JVAgntCommissionNote.CurrencyCode = AgentBilList[0].CurrencyCode;
+                            JVAgntCommissionNote.BinCode = AgentBilList[0].PinCode;
+                        }
+                        JVPostList.Add(JVAgntCommissionNote);
+                        JVPostCnt++;
+                    }
+
+                    for (int ICnt = 0; ICnt < SCommitionToCode.Count; ICnt++)
+                    {
+
+                        long OtherCommisionCode = SCommitionToCode[ICnt];
+                        Business<GeneralCommissionBillingDetailsList, GeneralCommissionBillingDetails> CommisionBilBus = new Business<GeneralCommissionBillingDetailsList, GeneralCommissionBillingDetails>();
+                        GeneralCommissionBillingDetails CommisionBilList = CommisionBilBus.GetById(OtherCommisionCode, false);
+
+                        JVPosting JVCommissionToNote = JVBus.CreateBusinessObject();
+
+                        JVCommissionToNote.ID = JVPostCnt;
+                        JVCommissionToNote.SerialNo = JVPostCnt;
+                        JVCommissionToNote.SourceCode = 1;//Underwritting
+                        JVCommissionToNote.JvPremiumType = 1;//Commision
+                        JVCommissionToNote.PolicyType = PolicyType;//Policy
+                        JVCommissionToNote.RefTypeCode = RefType;//Policy
+                        JVCommissionToNote.RefCode = RefCode;
+                        JVCommissionToNote.PolicyCode = PolicyCode;
+                        JVCommissionToNote.MemberTypeCode = 5;//Others
+                        JVCommissionToNote.OtherCommisionCode = OtherCommisionCode;
+                        JVCommissionToNote.Amount = (SCommitionToAmount[ICnt] > 0 ? SCommitionToAmount[ICnt] : SCommitionToAmount[ICnt] * -1);
+                        JVCommissionToNote.MemoTypeCode = (SCommitionToAmount[ICnt] > 0 ? 0 : 1);//0-Credit Note, 1 Debit
+                        JVCommissionToNote.AccountNo = CommisionBilList.AccountNumber;
+                        JVCommissionToNote.CurrencyCode = CommisionBilList.CurrencyCode;
+                        JVCommissionToNote.BinCode = CommisionBilList.PinCode;
+                        JVPostList.Add(JVCommissionToNote);
+                        JVPostCnt++;
+
+                    }
+
+                    for (int ICnt = 0; ICnt < SReInsuresrToCode.Count; ICnt++)
+                    {
+
+                        long ReInsurerCode = SReInsuresrToCode[ICnt];
+
+                        Business<InsuranceBillingList, InsuranceBilling> InsurerBus = new Business<InsuranceBillingList, InsuranceBilling>();
+                        InsuranceBillingList InsurerList = InsurerBus.GetByCriteria("Bill.INSCODE=" + ReInsurerCode + "and Bill.EndDate is null ", false);
+
+                        JVPosting JVInsurerNote = JVBus.CreateBusinessObject();
+
+                        JVInsurerNote.ID = JVPostCnt;
+                        JVInsurerNote.SerialNo = JVPostCnt;
+                        JVInsurerNote.SourceCode = 1;//Underwritting
+                        JVInsurerNote.JvPremiumType = 1;//Commision
+                        JVInsurerNote.PolicyType = PolicyType;//Policy
+                        JVInsurerNote.RefTypeCode = RefType;//Policy
+                        JVInsurerNote.RefCode = RefCode;
+                        JVInsurerNote.PolicyCode = PolicyCode;
+                        JVInsurerNote.MemberTypeCode = 6;//Insure
+                        JVInsurerNote.InsurerCode = ReInsurerCode;
+                        JVInsurerNote.Amount = (SReInsuresrToAmount[ICnt] > 0 ? SReInsuresrToAmount[ICnt] : SReInsuresrToAmount[ICnt] * -1);
+                        JVInsurerNote.MemoTypeCode = (SReInsuresrToAmount[ICnt] > 0 ? 0 : 1);//0-Credit Note, 1 Debit
+
+                        if (InsurerList.Count > 0)
+                        {
+                            JVInsurerNote.AccountNo = InsurerList[0].AccountNumber;
+                            JVInsurerNote.CurrencyCode = InsurerList[0].CurrencyCode;
+                            JVInsurerNote.BinCode = InsurerList[0].INSPinCode;
+                        }
+                        JVPostList.Add(JVInsurerNote);
+                        JVPostCnt++;
+
+                    }
+
+                    #endregion
+
+                    #region DdebitNote
+
+                    if (PremiumAgentCode > 0)
+                    {
+                        JVPosting JVPremiumAgentNote = JVBus.CreateBusinessObject();
+
+                        JVPremiumAgentNote.ID = JVPostCnt;
+                        JVPremiumAgentNote.SerialNo = JVPostCnt;
+                        JVPremiumAgentNote.SourceCode = 1;//Underwritting
+                        JVPremiumAgentNote.JvPremiumType = 0;//Premium
+                        JVPremiumAgentNote.PolicyType = PolicyType;//Policy
+                        JVPremiumAgentNote.RefTypeCode = RefType;//Policy
+                        JVPremiumAgentNote.RefCode = RefCode;
+                        JVPremiumAgentNote.PolicyCode = PolicyCode;
+                        JVPremiumAgentNote.MemberTypeCode = 0;//Agent
+                        JVPremiumAgentNote.AgentCode = PremiumAgentCode;
+                        JVPremiumAgentNote.Amount = (PremiumAgentAmount > 0 ? PremiumAgentAmount : PremiumAgentAmount * -1);
+                        JVPremiumAgentNote.MemoTypeCode = (PremiumAgentAmount > 0 ? 1 : 0);//0-Credit Note, 1 Debit
+
+                        if (AgentBilList.Count > 0)
+                        {
+                            CreditModuleDetailList CreList = CreBus.GetByCriteria("Dtl.AgentCode = " + PremiumAgentCode + " and Dtl.PinCode = " + AgentBilList[0].PinCode + "", true);
+                            if (CreList.Count > 0)
+                            {
+
+                                if (CreList[0].ISBlackList)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Agent Name : " + AgentBilList[0].AgentName + "','Agent is BlackList' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Agent is Blacklisted ! ");
+                                }
+                                double CreditTotal = 0.0;
+                                CreditTotal = CreList[0].OutstandingAmount + BrokerAmount;
+                                if (CreList[0].CreditLimit < CreditTotal && CreList[0].CreditLimit > 0)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Agent Name : " + AgentBilList[0].AgentName + "','Outstanding Amount is More than the Credit Limit ! ' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Outstanding Amount is More than the Credit Limit ! ");
+                                }
+                            }
+                            JVPremiumAgentNote.AccountNo = AgentBilList[0].AccountNumber;
+                            JVPremiumAgentNote.CurrencyCode = AgentBilList[0].CurrencyCode;
+                            JVPremiumAgentNote.BinCode = AgentBilList[0].PinCode;
+                        }
+                        JVPostList.Add(JVPremiumAgentNote);
+                        JVPostCnt++;
+                    }
+
+                    if (PremiumBrokerCode > 0)
+                    {
+                        JVPosting JVPremiumBrokerNote = JVBus.CreateBusinessObject();
+
+                        JVPremiumBrokerNote.ID = JVPostCnt;
+                        JVPremiumBrokerNote.SerialNo = JVPostCnt;
+                        JVPremiumBrokerNote.SourceCode = 1;//Underwritting
+                        JVPremiumBrokerNote.JvPremiumType = 0;//Premium
+                        JVPremiumBrokerNote.PolicyType = PolicyType;//Policy
+                        JVPremiumBrokerNote.RefTypeCode = RefType;//Policy
+                        JVPremiumBrokerNote.RefCode = RefCode;
+                        JVPremiumBrokerNote.PolicyCode = PolicyCode;
+                        JVPremiumBrokerNote.MemberTypeCode = 1;//Broker
+                        JVPremiumBrokerNote.BrokerCode = PremiumBrokerCode;
+                        JVPremiumBrokerNote.Amount = (PremiumBrokerAmount > 0 ? PremiumBrokerAmount : PremiumBrokerAmount * -1);
+                        JVPremiumBrokerNote.MemoTypeCode = (PremiumBrokerAmount > 0 ? 1 : 0);//0-Credit Note, 1 Debit
+
+                        if (BrokerBilList.Count > 0)
+                        {
+                            CreditModuleDetailList CreList = CreBus.GetByCriteria("Dtl.BrokerCode = " + PremiumBrokerCode + " and Dtl.PinCode = " + BrokerBilList[0].ProviderPinCode + "", true);
+                            if (CreList.Count > 0)
+                            {
+
+                                if (CreList[0].ISBlackList)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Broker Name : " + BrokerBilList[0].BrokerName + "','Broker is BlackList' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Broker is Blacklisted ! ");
+                                }
+                                double CreditTotal = 0.0;
+                                CreditTotal = CreList[0].OutstandingAmount + BrokerAmount;
+                                if (CreList[0].CreditLimit < CreditTotal && CreList[0].CreditLimit > 0)
+                                {
+                                    SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                    access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Broker Name : " + BrokerBilList[0].BrokerName + "','Outstanding Amount is More than the Credit Limit ! ' From Dual");
+                                    access.CloseConnection();
+                                    throw new Exception("Outstanding Amount is More than the Credit Limit ! ");
+                                }
+                            }
+                            JVPremiumBrokerNote.AccountNo = BrokerBilList[0].AccountNumber;
+                            JVPremiumBrokerNote.CurrencyCode = BrokerBilList[0].CurrencyCode;
+                            JVPremiumBrokerNote.BinCode = BrokerBilList[0].ProviderPinCode;
+                        }
+                        JVPostList.Add(JVPremiumBrokerNote);
+                        JVPostCnt++;
+                    }
+
+                    if (PremiumMemberCode > 0)
+                    {
+
+                        JVPosting JVPremiumMembeNote = JVBus.CreateBusinessObject();
+
+                        JVPremiumMembeNote.ID = JVPostCnt;
+                        JVPremiumMembeNote.SerialNo = JVPostCnt;
+                        JVPremiumMembeNote.SourceCode = 1;//Underwritting
+                        JVPremiumMembeNote.JvPremiumType = 0;//Premium
+                        JVPremiumMembeNote.PolicyType = PolicyType;//Policy
+                        JVPremiumMembeNote.RefTypeCode = RefType;//Policy
+                        JVPremiumMembeNote.RefCode = RefCode;
+                        JVPremiumMembeNote.PolicyCode = PolicyCode;
+                        JVPremiumMembeNote.MemberTypeCode = 3;//Member
+                        JVPremiumMembeNote.MemberCode = PremiumMemberCode;
+                        JVPremiumMembeNote.Amount = (PremiumMemberAmount > 0 ? PremiumMemberAmount : PremiumMemberAmount * -1);
+                        JVPremiumMembeNote.MemoTypeCode = (PremiumMemberAmount > 0 ? 1 : 0);//0-Credit Note, 1 Debit
+
+
+                        if (MemberBilList.Count > 0)
+                        {
+                            JVPremiumMembeNote.AccountNo = MemberBilList[0].AccountNumber;
+                            JVPremiumMembeNote.CurrencyCode = MemberBilList[0].CurrencyCode;
+                            JVPremiumMembeNote.BinCode = MemberBilList[0].PinCode;
+                        }
+                        JVPostList.Add(JVPremiumMembeNote);
+                        JVPostCnt++;
+                    }
+
+                    if (PremiumGroupCode > 0)
+                    {
+
+                        for (int ICnt = 0; ICnt < SGroupCodes.Count; ICnt++)
+                        {
+                            if (SGroupAmount[ICnt] == 0) continue;
+
+                            long SGroupcode = SGroupCodes[ICnt];
+
+                            Business<GroupBillingList, GroupBilling> GroupBilBus = new Business<GroupBillingList, GroupBilling>();
+                            GroupBillingList GroupBilList = GroupBilBus.GetByCriteria("Bil.GROUPCODE=" + SGroupcode + "and Bil.ENDDATE is null ", false);
+
+                            JVPosting JVPremiumGroupNote = JVBus.CreateBusinessObject();
+
+                            JVPremiumGroupNote.ID = JVPostCnt;
+                            JVPremiumGroupNote.SerialNo = JVPostCnt;
+                            JVPremiumGroupNote.SourceCode = 1;//Underwritting
+                            JVPremiumGroupNote.JvPremiumType = 0;//Premium
+                            JVPremiumGroupNote.PolicyType = PolicyType;//Policy
+                            JVPremiumGroupNote.RefTypeCode = RefType;//Policy
+                            JVPremiumGroupNote.RefCode = RefCode;
+                            JVPremiumGroupNote.PolicyCode = PolicyCode;
+                            JVPremiumGroupNote.MemberTypeCode = 2;//Group
+                            JVPremiumGroupNote.GroupCode = SGroupcode;
+                            JVPremiumGroupNote.Amount = (SGroupAmount[ICnt] > 0 ? SGroupAmount[ICnt] : SGroupAmount[ICnt] * -1);
+                            JVPremiumGroupNote.MemoTypeCode = (SGroupAmount[ICnt] > 0 ? 1 : 0);//Credit Note
+
+                            if (GroupBilList.Count > 0)
+                            {
+                                CreditModuleDetailList CreList = CreBus.GetByCriteria("Dtl.GroupCode = " + SGroupcode + " and Dtl.PinCode = " + GroupBilList[0].PinCode + "", true);
+                                if (CreList.Count > 0)
+                                {
+                                    if (CreList[0].ISBlackList)
+                                    {
+                                        SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                        access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Group Name : " + GroupBilList[0].GroupName + "','Client is BlackList' From Dual");
+                                        access.CloseConnection();
+                                        throw new Exception("Client is Blacklisted ! ");
+                                    }
+                                    double CreditTotal = 0.0;
+                                    CreditTotal = CreList[0].OutstandingAmount + BrokerAmount;
+                                    if (CreList[0].CreditLimit < CreditTotal && CreList[0].CreditLimit > 0)
+                                    {
+                                        SBS.DataAccess.OracleDataAccess access = new SBS.DataAccess.OracleDataAccess(Utilities.GetConnectionString(), false, "", "");
+                                        access.ExecuteSql("INSERT INTO INSUPLOADERRORLOG SELECT 'ID_TPABULKPOSTING'," + TPAUserCode + ",'PolicyID : " + CurObj.PolicyIdName + "','Group Name : " + GroupBilList[0].GroupName + "','Outstanding Amount is More than the Credit Limit ! ' From Dual");
+                                        access.CloseConnection();
+                                        throw new Exception("Outstanding Amount is More than the Credit Limit ! ");
+                                    }
+                                }
+                                JVPremiumGroupNote.AccountNo = GroupBilList[0].AccountNumber;
+                                JVPremiumGroupNote.CurrencyCode = GroupBilList[0].CurrencyCode;
+                                JVPremiumGroupNote.BinCode = GroupBilList[0].PinCode;
+                            }
+                            JVPostList.Add(JVPremiumGroupNote);
+                            JVPostCnt++;
+                        }
+
+
+                    }
+
+                    #endregion
+
+                    #region Party Insurer
+                    /*
+                if (CurObj.PolicyTypeCode == 1)//Policy
+                {
+                    foreach (NGIPolicySharingDetail SharDet in Policy.NGIPolicySharingDetailList)
+                    {
+                        JVPosting JVInsurerNote = JVBus.CreateBusinessObject();
+
+                        JVInsurerNote.ID = JVPostCnt;
+                        JVInsurerNote.SerialNo = JVPostCnt;
+                        JVInsurerNote.SourceCode = 1;//Underwritting
+                        JVInsurerNote.JvPremiumType = 1;//Commision
+                        JVInsurerNote.PolicyType = PolicyType;//Policy
+                        JVInsurerNote.RefTypeCode = RefType;//Policy
+                        JVInsurerNote.RefCode = RefCode;
+                        JVInsurerNote.PolicyCode = SharDet.PolicyCode;
+                        JVInsurerNote.MemberTypeCode = 6;//Insure
+                        JVInsurerNote.InsurerCode = SharDet.ReInsuranceCode;
+                        JVInsurerNote.Amount = SharDet.FinalPremiumValue;
+                        JVInsurerNote.MemoTypeCode = 0;
+
+                        Business<InsuranceBillingList, InsuranceBilling> InsurerBus = new Business<InsuranceBillingList, InsuranceBilling>();
+                        InsuranceBillingList InsurerList = InsurerBus.GetByCriteria("Bill.INSCODE=" + SharDet.ReInsuranceCode + "and Bill.EndDate is null ", false);
+
+                        if (InsurerList.Count > 0)
+                        {
+                            JVInsurerNote.AccountNo = InsurerList[0].AccountNumber;
+                            JVInsurerNote.CurrencyCode = InsurerList[0].CurrencyCode;
+                            JVInsurerNote.BinCode = InsurerList[0].INSPinCode;
+                        }
+                        JVPostList.Add(JVInsurerNote);
+                        JVPostCnt++;
+                    }
+
+                }
+
+                else//Ind Policy
+                {
+
+                    foreach (NGIIndPolicySharingDetail SharDet in IndPol.NGIIndPolicySharingDetailList)
+                    {
+
+                        JVPosting JVInsurerNote = JVBus.CreateBusinessObject();
+
+                        JVInsurerNote.ID = JVPostCnt;
+                        JVInsurerNote.SerialNo = JVPostCnt;
+                        JVInsurerNote.SourceCode = 1;//Underwritting
+                        JVInsurerNote.JvPremiumType = 1;//Commision
+                        JVInsurerNote.PolicyType = PolicyType;//Policy
+                        JVInsurerNote.RefTypeCode = RefType;//Policy
+                        JVInsurerNote.RefCode = RefCode;
+                        JVInsurerNote.PolicyCode = SharDet.IndividualPolicyCode;
+                        JVInsurerNote.MemberTypeCode = 6;//Insure
+                        JVInsurerNote.InsurerCode = SharDet.ReInsuranceCode;
+                        JVInsurerNote.Amount = SharDet.FinalPremiumValue;
+                        JVInsurerNote.MemoTypeCode = 0;
+
+                        Business<InsuranceBillingList, InsuranceBilling> InsurerBus = new Business<InsuranceBillingList, InsuranceBilling>();
+                        InsuranceBillingList InsurerList = InsurerBus.GetByCriteria("Bill.INSCODE=" + SharDet.ReInsuranceCode + "and Bill.EndDate is null ", false);
+
+                        if (InsurerList.Count > 0)
+                        {
+                            JVInsurerNote.AccountNo = InsurerList[0].AccountNumber;
+                            JVInsurerNote.CurrencyCode = InsurerList[0].CurrencyCode;
+                            JVInsurerNote.BinCode = InsurerList[0].INSPinCode;
+                        }
+                        JVPostList.Add(JVInsurerNote);
+                        JVPostCnt++;
+                    }
+
+                }
+                */
+                    #endregion
+
+
+                    #endregion
+                }
+
+
+
+                #endregion
+
+
+
+                foreach (JVPosting Post in JVPostList)
+                {
+                    if (string.IsNullOrEmpty(Post.BinCode))
+                        throw new Exception("Pincode should not Empty !");
+                }
+                SQLList.AddRange(JVBus.GetSaveCommands(JVPostList));
+            }
+
+
+            CurObj.PreSqls.AddRange(SQLList);
+
+
+            return true;
+        }
+ 
+
+        public long ID
+        {
+            get { return _ID; }
+            set { _ID = value; PropertyHasChanged(); }
+        }
+
+        public string FinancePrefix
+        {
+            get { return _FinancePrefix; }
+            set { _FinancePrefix = value; PropertyHasChanged(); }
+        }
+
+        public long FinanceNo
+        {
+            get { return _FinanceNo; }
+            set { _FinanceNo = value; PropertyHasChanged(); }
+        }
+
+        public string FinanceSuffix
+        {
+            get { return _FinanceSuffix; }
+            set { _FinanceSuffix = value; PropertyHasChanged(); }
+        }
+
+        public string FinanceFullno
+        {
+            get { return _FinanceFullno; }
+            set { _FinanceFullno = value; PropertyHasChanged(); }
+        }
+
+        public string RefDate
+        {
+            get { return _RefDate.ToString(Helper.DateFormat); }
+            set { _RefDate = Utilities.ConvertToHelperDate(value); PropertyHasChanged(); }
+        }
+
+        public int PolicyTypeCode
+        {
+            get { return _PolicyTypeCode; }
+            set { _PolicyTypeCode = value; PropertyHasChanged(); }
+        }
+
+        public string PolicyTypeName
+        {
+            get { return _PolicyTypeName; }
+            set { _PolicyTypeName = value; PropertyHasChanged(); }
+        }
+
+        public long PolicyIdCode
+        {
+            get { return _PolicyIdCode; }
+            set { _PolicyIdCode = value; PropertyHasChanged(); }
+        }
+
+        public string PolicyIdName
+        {
+            get { return _PolicyIdName; }
+            set { _PolicyIdName = value; PropertyHasChanged(); }
+        }
+
+        public string PolicyName
+        {
+            get { return _PolicyName; }
+            set { _PolicyName = value; PropertyHasChanged(); }
+        }
+
+        public long IPPolicyIDCode
+        {
+            get { return _IPPolicyIDCode; }
+            set { _IPPolicyIDCode = value; PropertyHasChanged(); }
+        }
+
+        public string IPPolicyIDName
+        {
+            get { return _IPPolicyIDName; }
+            set { _IPPolicyIDName = value; PropertyHasChanged(); }
+        }
+
+        public string Startdate
+        {
+            get { return _Startdate.ToString(Helper.DateFormat); }
+            set { _Startdate = Utilities.ConvertToHelperDate(value); PropertyHasChanged(); }
+        }
+
+        public string Enddate
+        {
+            get { return _Enddate.ToString(Helper.DateFormat); }
+            set { _Enddate = Utilities.ConvertToHelperDate(value); PropertyHasChanged(); }
+        }
+
+        public double AddPremiumTotal
+        {
+            get { return _AddPremiumTotal; }
+            set { _AddPremiumTotal = value; PropertyHasChanged(); }
+        }
+
+        public double DeletePremiumTotal
+        {
+            get { return _DeletePremiumTotal; }
+            set { _DeletePremiumTotal = value; PropertyHasChanged(); }
+        }
+
+        public double Total
+        {
+            get { return _Total; }
+            set { _Total = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public int CreatedIn
+        {
+            get { return _CreatedIn; }
+            set { _CreatedIn = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public DateTime CreatedOn
+        {
+            get { return _CreatedOn; }
+            set { _CreatedOn = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public long CreatedBy
+        {
+            get { return _CreatedBy; }
+            set { _CreatedBy = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public DateTime LastmodifiedOn
+        {
+            get { return _LastmodifiedOn; }
+            set { _LastmodifiedOn = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public long LastmodifiedBy
+        {
+            get { return _LastmodifiedBy; }
+            set { _LastmodifiedBy = value; PropertyHasChanged(); }
+        }
+
+        public long CompanyCode
+        {
+            get { return _CompanyCode; }
+            set { _CompanyCode = value; PropertyHasChanged(); }
+        }
+
+        public long LocationCode
+        {
+            get { return _LocationCode; }
+            set { _LocationCode = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public DateTime DeactivatedOn
+        {
+            get { return _DeactivatedOn; }
+            set { _DeactivatedOn = value; PropertyHasChanged(); }
+        }
+
+        [ScriptIgnore()]
+        public long DeactivatedBy
+        {
+            get { return _DeactivatedBy; }
+            set { _DeactivatedBy = value; PropertyHasChanged(); }
+        }
+
+        public long SerialNo
+        {
+            get { return _SerialNo; }
+            set { _SerialNo = value; PropertyHasChanged(); }
+        }
+
+        public int AuthorizedStatusCode
+        {
+            get { return _AuthorizedStatusCode; }
+            set { _AuthorizedStatusCode = value; PropertyHasChanged(); }
+        }
+
+        public string AuthorizedStatusName
+        {
+            get { return _AuthorizedStatusName; }
+            set { _AuthorizedStatusName = value; PropertyHasChanged(); }
+        }
+
+        #region DocumentDetails
+
+        [ReferenceKey("PolicyFinancePostingCode")]
+        [PresentionName("PolicyFinancePostingDtlList")]
+        [NonUpdate]
+        private PolicyFinancePostingDtlList _PolicyFinancePostingDtlList;
+
+        public PolicyFinancePostingDtlList PolicyFinancePostingDtlList
+        {
+            get
+            {
+                if (_PolicyFinancePostingDtlList == null) _PolicyFinancePostingDtlList = new SBS.Business.Objects.HumanResource.NGI.UnderWritting.Policies.PolicyFinancePostingDtlList();
+                return _PolicyFinancePostingDtlList;
+            }
+            set { _PolicyFinancePostingDtlList = value; PropertyHasChanged(); }
+        }
+
+        #endregion
+
+
+        #region Commission Details
+
+        [ReferenceKey("PolicyFinancePostingCode")]
+        [PresentionName("PolicyFinancePostingCommissionDtlList")]
+        private PolicyFinancePostingCommissionDtlList _PolicyFinancePostingCommissionDtlList;
+
+        public PolicyFinancePostingCommissionDtlList PolicyFinancePostingCommissionDtlList
+        {
+            get
+            {
+                if (_PolicyFinancePostingCommissionDtlList == null) _PolicyFinancePostingCommissionDtlList = new SBS.Business.Objects.HumanResource.NGI.UnderWritting.Policies.PolicyFinancePostingCommissionDtlList();
+                return _PolicyFinancePostingCommissionDtlList;
+            }
+            set { _PolicyFinancePostingCommissionDtlList = value; PropertyHasChanged(); }
+        }
+
+        #endregion
+
+        #region  Installment
+
+        [ReferenceKey("PolicyFinancePostingCode")]
+        [PresentionName("PolicyFinanceInstallmentList")]
+        private PolicyFinanceInstallmentList _PolicyFinanceInstallmentList;
+
+        public PolicyFinanceInstallmentList PolicyFinanceInstallmentList
+        {
+            get
+            {
+                if (_PolicyFinanceInstallmentList == null) _PolicyFinanceInstallmentList = new SBS.Business.Objects.HumanResource.NGI.UnderWritting.Policies.PolicyFinanceInstallmentList();
+                return _PolicyFinanceInstallmentList;
+            }
+            set { _PolicyFinanceInstallmentList = value; PropertyHasChanged(); }
+        }
+
+        #endregion
+
+        public bool LoadAfterSave
+        {
+            get { return _LoadAfterSave > 0; }
+
+            set
+            {
+                _LoadAfterSave = value ? 1 : 0; PropertyHasChanged();
+            }
+        }
+    }
+}

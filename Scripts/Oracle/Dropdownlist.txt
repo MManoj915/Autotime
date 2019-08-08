@@ -1,0 +1,17 @@
+Diagnosis : SELECT * FROM SF_CLAIMGETVERSIONPRICE_VW where VALUE = -1
+
+Drugs Standard Code : SELECT * FROM SF_CLAIMGETVERSIONPRICE_VW where Value = 5 AND RequestType = 2
+
+Drugs Benefit Code : select RowNum PKey,ICV.* from (Select ICV.* from IM_COVERED_BENEFIT_V ICV ) ICV where ICV.MemberPolicyCode= (select MemberPolicyCode from IM_MEMBERPOLICY WHERE MEMBERCODE = 10000000000000001 and PolicyCode = 10000000000000001 and CategoryCode = 100000000000000003)
+
+Drugs Denial Code : select ICDM.*,Den.CODE DetailName,Den.LongDesc,GEN3.CONSTANTNAME RecoveryFromName from IM_Claim_DenialMapping ICDM  left join IM_VERSION_DETALIS Den on Den.DetailCode=ICDM.DenailCode  left join genconstant gen3 on gen3.ConstantValue=ICDM.RecoveryFrom and gen3.Category='DENIEDFOR' and gen3.LanguageCode ='en-US'
+
+
+Activity Standard code : SELECT * FROM SF_CLAIMGETVERSIONPRICE_VW where Value not in (5,-1) AND RequestType = 2 and UserCode = 100000000000000002 and ProviderCode = 1000000000000000958 and TO_DATE('13-10-08','dd/mm/RR') between EFFECTIVEFROM AND NVL( EFFECTIVETO,TO_DATE('13-10-08','dd/mm/RR'))   
+
+
+Activity Benefit Code : select RowNum PKey,ICV.* from (Select ICV.* from IM_COVERED_BENEFIT_V ICV ) ICV where ICV.MemberPolicyCode= (select MemberPolicyCode from IM_MEMBERPOLICY WHERE MEMBERCODE = 10000000000000001 and PolicyCode = 10000000000000001 and CategoryCode = 100000000000000003)
+
+Activity Denial Code : select ICDM.*,Den.CODE DetailName,Den.LongDesc,GEN3.CONSTANTNAME RecoveryFromName from IM_Claim_DenialMapping ICDM  left join IM_VERSION_DETALIS Den on Den.DetailCode=ICDM.DenailCode  left join genconstant gen3 on gen3.ConstantValue=ICDM.RecoveryFrom and gen3.Category='DENIEDFOR' and gen3.LanguageCode ='en-US'
+
+                  

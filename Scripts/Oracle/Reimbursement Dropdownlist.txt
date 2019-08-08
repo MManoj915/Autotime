@@ -1,0 +1,17 @@
+﻿Activity AND Drug standard code :    
+SELECT * FROM SF_CLAIMGETVERSIONPRICE_VW where  RequestType = 1 
+
+Diagnosis Standard Code :      
+SELECT * FROM SF_CLAIMGETVERSIONPRICE_VW where VALUE = -1
+
+Currency : 
+SELECT CUR.* FROM GENCURRENCY CUR 
+
+Rate : 
+SELECT * FROM GENEXCHANGERATE
+
+FORM No :
+Select IVW.* from IM_CLAIMMEMBERBATCH_VW IVW
+
+Batch No :
+Select IVW.* from IM_CLAIMMEMBERBATCH_VW IVW

@@ -1,0 +1,3 @@
+ select Ins.*,GEN.CONSTANTNAME InsuranceTypeName,iloc.Organization_Name BranchName from IM_INSURER Ins   
+ left join HR_ORGANIZATIONS_D iloc on iloc.ORGANIZATIONS_CODE=Ins.BranchCode 
+ left join genconstant gen on GEN.CONSTANTVALUE= Ins.INS_TYPE and GEN.CATEGORY='INSURANCETYPE' and GEN.LANGUAGECODE='en-US'

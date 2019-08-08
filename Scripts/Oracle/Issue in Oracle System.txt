@@ -1,0 +1,48 @@
+Plan Master :
+
+Cannot Save Emirates sub Detail
+
+Agent Master :
+
+Show detail down to the record
+
+Agent Billing Detail Error :
+
+List of Value Error while Save. Disable the end Date
+
+Geographic area :
+
+Cannot Save Emirate Sub Detail and City. Screens shows Undefined Message Error
+
+Broker Master :
+
+Show detail down to the record
+
+Broker Billing Detail :
+
+Broker billing screen Lov showing agent id and agent name which is totally wrong. IT should show Broker ID and Broker Name. 
+
+Group Master :
+
+Group Name should be text field but in the screen it's LOV. Screens shows Undefined Message Error
+
+
+Member Master :
+
+LOV Error While save
+
+Member billing Detail :
+
+Member ID should be LOV. Cannot continue this screen without Member.
+
+Policy Master :
+
+End Date should be 1 year from Start Date. Category detail show LOV Error While Save
+
+Individual Policy Master :
+
+End Date should be 1 year from Start Date. Category detail show Undefined Message Error While Save
+
+Add Member Policy :
+
+Commission Detail Should be displayed once we select the Policy

@@ -1,0 +1,176 @@
+PROMPT CREATE OR REPLACE FUNCTION sf_finjvsaccstatement
+CREATE OR REPLACE FUNCTION sf_finjvsaccstatement
+(
+ABANKACCOUNT varchar2 default 'ALL',
+ASTARTDATE date default sysdate-5,
+AENDDATE date default sysdate,
+CHECKBOXOPTION NVARCHAR2 default 'Y',
+CURRENTUSER number default 10000000000001,
+ALANGUAGECODE NVARCHAR2 default 'en-US',
+ACOMPANYCODE number default 1
+)
+RETURN FINJVFINSTMTACCOUNTTABLE PIPELINED IS
+v varchar2(1);
+TABLEDATA FINJVFINSTMTACCOUNTTYPE := FINJVFINSTMTACCOUNTTYPE(
+NULL,NULL,NULL,NULL,NULL,
+NULL,NULL,NULL,NULL,NULL,
+NULL,NULL,NULL,NULL,NULL,NULL
+);
+TYPE LCURTYPE IS REF CURSOR;
+LCUR LCURTYPE;
+BEGIN
+/*
+select nvl((select 'X' from dual where exists (select JE_LINE_CODE from GL_JE_LINES dtl
+                                        left join GL_JE_HEADERS b on dtl.je_code=b.je_code
+                                        join GL_CODE_COM_DETAILS acc on acc.CODE_COM_ID=dtl.account_id
+                                        join GL_ACCOUNTS accn on acc.ATTRIBUTE4=accn.acc_code
+                                        WHERE accn.ACCOUNT_CODE  in (SELECT * FROM TABLE (FN_GETPORTALCRITERIA
+
+(ABANKACCOUNT,'FnJVAccounts',1,-1,-1,CURRENTUSER,-1,1,ALANGUAGECODE)))
+                                        and  to_date(b.JE_DATE,'DD/MM/YYYY') between to_date(ASTARTDATE,'DD/MM/YYYY') and to_date
+
+(AENDDATE,'DD/MM/YYYY'))),'Y') into V from dual;
+*/
+select decode(nvl(count(*),0),0,'Y','X') into V  from GL_JE_LINES dtl
+                                        join GL_JE_HEADERS b on dtl.je_code=b.je_code  and  b.JE_STATUS=1
+                                        join GL_CODE_COM_DETAILS acc on acc.CODE_COM_ID=dtl.account_id
+                                        join admcompany com on com.companycode=b.COMPANYCODE and com.companycode=ACOMPANYCODE
+                                        join GL_ACCOUNTS accn on acc.ATTRIBUTE4=accn.acc_code and com.customercode=accn.customercode and com.LEGALENTITYCODE=accn.LEGALENTITYCODE
+
+                                        WHERE  accn.ACCOUNT_CODE  in (SELECT * FROM TABLE (FN_GETPORTALCRITERIA
+
+(ABANKACCOUNT,'FnJVAccounts',1,-1,-1,CURRENTUSER,-1,1,ALANGUAGECODE)))
+                                        and  to_date(b.JE_DATE,'DD/MM/YYYY') between to_date(ASTARTDATE,'DD/MM/YYYY') and to_date
+
+(AENDDATE,'DD/MM/YYYY');
+
+if V ='X'
+then
+    OPEN LCUR FOR
+    select  JE_SOURCE_ID,acc_code,acc_description,JE_LINE_CODE je_code,JE_DATE,JE_NAME,JV_REF_NO,notes,
+    check_no,binficary_name, debit_amount, credit_amount,
+    openingbalance,--((openingbalance+debit_amount)-credit_amount) Balance,
+    openingbalance + sum(debit_amount - credit_amount) over(partition by acc_code order by Hed.JE_DATE,Hed.JE_LINE_CODE ASC) Balance,
+    'Y' ISERIALNO
+    from
+    (
+    select
+
+
+    (select nvl((sum(a.DEBIT_AMOUNT*b.je_rate)-sum(a.CREDIT_AMOUNT*b.je_rate)),0) openingbalance
+    from GL_JE_LINES a join GL_JE_HEADERS b on a.je_code=b.je_code
+    join admcompany com on com.companycode=b.COMPANYCODE and com.companycode=ACOMPANYCODE
+    where  b.JE_STATUS=1 and a.account_id=dtl.account_id and to_date(b.JE_DATE,'DD/MM/YYYY')<to_date
+
+(ASTARTDATE,'DD/MM/YYYY')) openingbalance,
+
+    /*
+    (select nvl((sum(a.DEBIT_AMOUNT)-sum(a.CREDIT_AMOUNT)),0) openingbalance
+    from GL_JE_LINES a, GL_JE_HEADERS b,GL_CODE_COM_DETAILS abc
+    where a.je_code=b.je_code and abc.CODE_COM_ID=a.account_id and abc.ATTRIBUTE4=acc.ATTRIBUTE4 and b.JE_DATE<ASTARTDATE and
+
+a.JE_LINE_CODE<dtl.JE_LINE_CODE) openingbalance,
+    */
+    --(select nvl((sum(a.DEBIT_AMOUNT)-sum(a.CREDIT_AMOUNT)),0) openingbalancerec
+    --from GL_JE_LINES a, GL_JE_HEADERS b
+    --where a.je_code=b.je_code and a.account_id=dtl.account_id and a.JE_LINE_CODE<dtl.JE_LINE_CODE) openingbalancerec,
+
+    --where a.je_code=b.je_code and b.JE_DATE<ASTARTDATE) openingbalance,
+    con.constantname as JE_SOURCE_ID,accn.acc_code,accn.acc_description,hd.je_code,hd.JE_DATE,hd.JE_NAME,hd.JV_REF_NO,
+    dtl.notes  notes
+    ,decode(hd.JE_SOURCE,14,RecH.CHECK_NUMBER,23,PayH.CHEQUE_NUMBER,27,ARIV.CHEQUE_NO,29,SCC.CHEQUE_NO,31,PRC.CHECKNO,0,INP.CHEQUENO,'')
+
+check_no,
+    decode(hd.JE_SOURCE,14,RecH.BENEFICIARY_NAME,23,PayH.BENEFICIARY_NAME,27,ben.BENEFICENTNAME,28,APMCP.Being,0,INP.name,'')
+
+binficary_name,
+    dtl.debit_amount*hd.je_rate debit_amount, dtl.credit_amount*hd.je_rate credit_amount,accn.ACCOUNT_CODE,dtl.JE_LINE_CODE
+    from gl_je_headers hd
+    --join admcompany com on com.companycode=hd.COMPANYCODE and com.companycode=ACOMPANYCODE
+    join gl_je_lines dtl on hd.je_code=dtl.je_code and hd.JE_STATUS=1
+    join GL_CODE_COM_DETAILS acc on acc.CODE_COM_ID=dtl.account_id
+    join admcompany com on com.companycode=hd.COMPANYCODE  and com.companycode=ACOMPANYCODE
+    join admcustomer cust on cust.CUSTOMERCODE = com.CUSTOMERCODE
+    join GL_ACCOUNTS accn on acc.ATTRIBUTE4=accn.acc_code and accn.CUSTOMERCODE =com.CUSTOMERCODE and com.LEGALENTITYCODE=accn.LEGALENTITYCODE
+    left join AR_MISC_RECEIPT_HEADERS RecH on hd.JE_SOURCE=14 and RecH.MISC_RECEIPT_CODE = hd.Source_Code
+    left join AP_MISC_PAYMENT_HEADERS PayH on hd.JE_SOURCE=23 and PayH.MISC_PAYMENT_CODE = hd.Source_Code
+    left join bmReciveBonds ARIV on hd.JE_SOURCE=27 and ARIV.RB_CODE = hd.Source_Code
+    left join bmbeneficents ben on ben.BENEFICENT_CODE=ARIV.BENEFICENT_CODE
+    left join AP_Multi_Cheque_Payment APMCP on hd.JE_SOURCE=28 and APMCP.CHEQUE_PAYMENT_CODE = hd.Source_Code
+    left join SC_COLLECTIONS SCC on hd.JE_SOURCE=29 and SCC.COLLECTIONS_CODE = hd.Source_Code
+    left join PRO_COLLECTIONS PRC on hd.JE_SOURCE=31 and PRC.COLLECTIONS_CODE = hd.Source_Code
+    left join Internal_payment INP on hd.JE_SOURCE=0 and INP.INTERNAL_PAY_CODE = hd.Source_Code
+    join genconstant con on con.category = 'POSTINGSOURCETYPE' and con.constantvalue=hd.JE_SOURCE and upper(con.languagecode)=upper
+
+(ALANGUAGECODE)
+    order by accn.acc_code ,dtl.JE_LINE_CODE asc
+    ) Hed
+    where Hed.ACCOUNT_CODE in (SELECT * FROM TABLE (FN_GETPORTALCRITERIA(ABANKACCOUNT,'FnJVAccounts',1,-1,-1,CURRENTUSER,-
+
+1,1,ALANGUAGECODE))) and
+    to_date(Hed.JE_DATE,'DD/MM/YYYY') between to_date(ASTARTDATE,'DD/MM/YYYY') and to_date(AENDDATE,'DD/MM/YYYY')
+    order by Hed.acc_code ,Hed.JE_DATE,Hed.JE_LINE_CODE ASC
+    ;
+else
+    OPEN LCUR FOR
+    select distinct
+          null JE_SOURCE_ID,
+          accn.acc_code,
+          accn.acc_description,
+          null  je_code,
+          null JE_DATE,
+          null JE_NAME,
+          null JV_REF_NO,
+          null notes,
+          null check_no,
+          null binficary_name,
+          null debit_amount,
+          null credit_amount,
+         (select nvl((sum(a.DEBIT_AMOUNT)-sum(a.CREDIT_AMOUNT)),0) openingbalance
+          from GL_JE_LINES a join GL_JE_HEADERS b on a.je_code=b.je_code
+            join admcompany com on com.companycode=b.COMPANYCODE and com.companycode=ACOMPANYCODE
+          where b.JE_STATUS=1 and a.account_id=dtl.account_id and to_date(b.JE_DATE,'DD/MM/YYYY')<to_date
+
+(ASTARTDATE,'DD/MM/YYYY')) openingbalance,
+          null Balance,
+          'Y' ISERIALNO
+    from GL_JE_LINES dtl
+    join GL_JE_HEADERS b on dtl.je_code=b.je_code and  b.JE_STATUS=1
+    join GL_CODE_COM_DETAILS acc on acc.CODE_COM_ID=dtl.account_id
+    --join GL_ACCOUNTS accn on acc.ATTRIBUTE4=accn.acc_code
+     join admcompany com on com.companycode=b.COMPANYCODE and com.companycode=ACOMPANYCODE
+     join GL_ACCOUNTS accn on acc.ATTRIBUTE4=accn.acc_code and com.customercode=accn.customercode and com.LEGALENTITYCODE=accn.LEGALENTITYCODE
+    WHERE accn.ACCOUNT_CODE  in (SELECT * FROM TABLE (FN_GETPORTALCRITERIA(ABANKACCOUNT,'FnJVAccounts',1,-1,-1,CURRENTUSER,-
+
+1,1,ALANGUAGECODE)))
+    and to_date(b.JE_DATE,'DD/MM/YYYY')<to_date(ASTARTDATE,'DD/MM/YYYY')
+;
+end if;
+LOOP
+FETCH LCUR INTO
+TABLEDATA.JE_SOURCE_ID,
+TABLEDATA.ACC_CODE,
+TABLEDATA.ACC_DESCRIPTION,
+TABLEDATA.JE_CODE,
+TABLEDATA.JE_DATE,
+TABLEDATA.JE_NAME,
+TABLEDATA.JV_REF_NO,
+TABLEDATA.NOTES,
+TABLEDATA.CHECK_NO,
+TABLEDATA.BINFICARY_NAME,
+TABLEDATA.DEBIT_AMOUNT,
+TABLEDATA.CREDIT_AMOUNT,
+TABLEDATA.OPENINGPALANCE,
+TABLEDATA.BALANCE,
+TABLEDATA.ISERIALNO;
+EXIT WHEN LCUR%NOTFOUND;
+PIPE ROW(TABLEDATA);
+END LOOP;
+CLOSE LCUR;
+END SF_FINJVSACCSTATEMENT;
+
+
+
+
+/
+

@@ -1,0 +1,11 @@
+ 
+1.Refresh of grid in policy and add member policy
+2.Cancel button in both screens
+3.Delete member premium 
+4.Portal upload error message
+5. NC Format
+6.Upload to DHA and HAAD
+7. Attachment in portal is not visible in BOF
+8. Please update the PRODUCT, PRODUCT CLASS , PRODUCT TYPE, Contract ID and ID from the last list i have send
+9. I am finding out the missing members for NC , i will send you the list for update
+ 

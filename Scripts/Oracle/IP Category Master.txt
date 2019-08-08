@@ -1,0 +1,141 @@
+IP Category Master :
+
+select ipc.*,PLN.PLAN_NAME,CAT.CATEGORY_NAME CategoryName,ISU.INS_NAME insname,POL.POLICYID,POL.POLICYNAME,GRO.GROUP_NAME GroupName,UB.UBIPNAME,'' RecommendedUBPID  
+ ,(mem.FIRST_NAME||' '||mem.LAST_NAME)  MemberName,MEM.MEMBER_ID MemberID,mem.ARABIC_FIRST_NAME AlternateName,
+ '' LoadCountryStateCityButton,LOK1.LOOKUPNAME RoomTypeName ,genn1.CONSTANTNAME EmgDetectWINetwTypeName,
+ genn2.CONSTANTNAME EmgDetectOONetwTypeName ,GEN3.CONSTANTNAME LimitTypeName ,GEN4.CONSTANTNAME CoInTypeName,GEN8.CONSTANTNAME OONDedectableTypeName
+ ,GEN7.CONSTANTNAME OONCoInTypeName,GEN9.CONSTANTNAME DedectableTypeName,PRT.REPORT_NAME ReportTemplateName,TEMP.TEMPLATE_NAME_EN ElementTemplateName,Pro.PROVINCENAME EmirateName,'' as CardTextArea,'' as CardText from IM_NGIINDPOLICYCATEGORY ipc 
+ join admcompany admcom on ADMCOM.COMPANYCODE=ipc.COMPANYCODE and ADMCOM.COMPANYCODE=  Helper.CompanyCode    
+ left join IM_PLANS pln on PLN.PLAN_CODE=IPC.PLANCODE
+ left join im_categories cat on CAT.CATEGORY_CODE=IPC.CATEGORYCODE
+ left join IM_INSURER isu on ISU.INSCODE=ipc.FRONTINGSETTING
+ left join IM_INDIVIDUALPOLICY pol on POL.INDIVIDUALPOLICYCODE=IPC.INDIVIDUALPOLICYCODE
+ left join admlookupdetail lok1 on LOK1.LOOKUPDETAILCODE=IPC.RoomType  
+ left join IM_GROUPS gro on GRO.GROUP_CODE=IPC.GROUPCODE
+ left join IM_MEMBERS mem on MEM.MEMBER_CODE=ipc.MEMBERCODE
+ left join IM_UBIP ub on UB.UBIPCODE=IPC.UBIPCODE  
+ left join genconstant genn1 on genn1.CONSTANTVALUE=ipc.EMGDETECTWINETWTYPE and genn1.CATEGORY='CALCMETHOD' and genn1.LANGUAGECODE='  Helper.LanguageCode  ' 
+ left join genconstant genn2 on genn2.CONSTANTVALUE=ipc.EMGDETECTOONETWTYPE and genn2.CATEGORY='CALCMETHOD' and genn2.LANGUAGECODE='  Helper.LanguageCode  ' 
+ left join genconstant gen3 on GEN3.CONSTANTVALUE=ipc.LIMITTYPE  and GEN3.CATEGORY='CALCMETHOD' and GEN3.LANGUAGECODE='  Helper.LanguageCode  '
+ left join genconstant gen4 on GEN4.CONSTANTVALUE=ipc.CO_IN_TYPE and GEN4.CATEGORY='CALCMETHOD' and GEN4.LANGUAGECODE='  Helper.LanguageCode  '
+ left join genconstant gen8 on GEN8.CONSTANTVALUE=ipc.OONDEDECTABLETYPE  and GEN8.CATEGORY='CALCMETHOD' and GEN8.LANGUAGECODE='  Helper.LanguageCode  '
+ left join genconstant gen7 on GEN7.CONSTANTVALUE=ipc.OONCO_IN_TYPE and GEN7.CATEGORY='CALCMETHOD' and GEN7.LANGUAGECODE='  Helper.LanguageCode  '
+ left join genconstant gen9 on GEN9.CONSTANTVALUE=ipc.DEDECTABLETYPE  and GEN9.CATEGORY='CALCMETHOD' and GEN9.LANGUAGECODE='  Helper.LanguageCode  '
+ left join PM_REPORT_TEMPLATE prt on  PRT.REPORT_TEMPLATE_CODE=ipc.REPORTTEMPLATECODE
+ left join GenProvince Pro on Pro.ProvinceCode=ipc.EMIRATECODE  
+ left join IM_ELEMENTTEMPLATE temp on temp.ELEMENTTEMPLATECODE =ipc.ELEMENTTEMPLATECODE  
+
+
+IP Category Network :
+
+select pcn.*,NET.NETWORKNAME,NET.NETWORKID,GEN.CONSTANTNAME ApplicableForName from IM_INDIVIDUALPOLICYNETWORK pcn 
+ left join IM_NETWORKS net on NET.NETWORKCODE=pcn.NETWORKCODE
+ left join genconstant gen on gen.CONSTANTVALUE = PCN.APPLICABLEFORCODE and GEN.CATEGORY='APPLICABLE' and GEN.LANGUAGECODE='  Helper.LanguageCode  '
+
+
+IP Category Benefit :
+
+select ipb.*,Ben.Benefit_ID BenefitID,Ben.Benefit_Name BenefitName,GEN.CONSTANTNAME TypeName,(select ben1.BENEFIT_NAME BenefitName from IIM_BENEFIT_CODES_DET SubDet  
+ left join IM_BENEFIT_CODES ben1 on ben1.BENEFIT_CODE=SubDet.BENEFIT_CODE where SubDet.Sub_BENEFIT_CODE= ipb.BENEFIT_CODE and rownum=1)ParentName from IM_INDIVIDUALPOLICYBEBEFITS ipb   
+ left join IM_BENEFIT_CODES Ben on Ben.BENEFIT_CODE=ipb.BENEFIT_CODE 
+ left join genconstant gen on GEN.CONSTANTVALUE=ipb.TYPECODE  and GEN.CATEGORY='NGIBENEFITSTYPE' and GEN.LANGUAGECODE='  Helper.LanguageCode  '
+
+IP Geographic area :
+
+SELECT ar.*,iga.GANAME,iga.GAID FROM IM_IPGEOGRAFICAREA ar  
+ join admcompany admcom on ADMCOM.COMPANYCODE=ar.COMPANYCODE and ADMCOM.COMPANYCODE=  Helper.CompanyCode    
+ left join IM_GEOGRAPHIC_AREAS iga on iga.GACODE=ar.GACODE
+
+
+IP Excluded PRovider :
+
+select pep.*,IP.PROVIDERNAME from IM_IMPEXCLUDEDPROVIDER pep                                              
+left join IM_PROVIDERS ip on IP.PROVIDERCODE=pep.PROVIDERCODE
+
+IP Included Provider :
+
+select ipip.*,IP.PROVIDERNAME from IM_IPINCLUDEPROVIDER ipip 
+ left join IM_PROVIDERS ip on IP.PROVIDERCODE=ipip.PROVIDERCODE 
+
+IP Countries :
+
+select pec.*,GEN.COUNTRYNAME from IM_IPEXCLUDEDCOUNTRY pec                                
+ left join gencountry gen on GEN.COUNTRYCODE=pec.COUNTRYCODE
+
+IP State :
+
+SELECT pes.*,GPR.PROVINCENAME  FROM IM_IPEXCLUDEDSTATES pes                       
+left join  genprovince gpr on GPR.PROVINCECODE=pes.PROVINCECODE;
+
+
+IP city :
+
+select ipc.*,pla.PLACENAME CityName from IM_IPEXCLUDEDCITY  ipc                      
+  left join genplace pla on pla.PLACECODE=ipc.PLACECODE
+
+
+IP Age and Limit :
+
+select age.*,GEN.CONSTANTNAME GenderName,GEN1.CONSTANTNAME ApplicableForName from IM_INDCATESETTINGAGELIMITS age    
+ left join genconstant gen1 on GEN1.CONSTANTVALUE=age.ApplicableFor and GEN1.CATEGORY='MARITAL_STATUS' and GEN1.LANGUAGECODE='Helper.LanguageCode' 
+ left join genconstant gen on GEN.CONSTANTVALUE=age.GENDERCODE and GEN.CATEGORY='Gender' and GEN.LANGUAGECODE='  Helper.LanguageCode  ' 
+
+
+IP Card Text :
+
+select * from IM_INDCATEGORY_CARDTEXT
+
+IP Overrider Per PRovider Type :
+
+select IPORPP.*,GEN.CONSTANTNAME ApplicableForName,GEN1.CONSTANTNAME ProviderTypeName,GEN2.CONSTANTNAME DedectableTypeName,   
+GEN3.CONSTANTNAME CoInTypeName ,GEN4.CONSTANTNAME LimitTypeName,GEN5.CONSTANTNAME OONDedectableTypeName ,
+GEN6.CONSTANTNAME OONCoInTypeName from IM_IP_OVERRIDEPERPROVIDERDTL IPORPP    
+left join genconstant gen on GEN.CONSTANTVALUE=IPORPP.APPLICABLEFOR and GEN.CATEGORY='APPLICABLE' and 
+GEN.LANGUAGECODE='en-US' 
+left join genconstant gen1 on GEN1.CONSTANTVALUE=IPORPP.PROVIDERTYPE  and GEN1.CATEGORY='PROVIDERTYPE' and 
+GEN1.LANGUAGECODE='en-US' 
+left join genconstant gen2 on GEN2.CONSTANTVALUE=IPORPP.DEDECTABLETYPE  and GEN2.CATEGORY='CALCMETHOD' and 
+GEN2.LANGUAGECODE='en-US' 
+left join genconstant gen4 on GEN4.CONSTANTVALUE=IPORPP.LIMITTYPE  and GEN4.CATEGORY='CALCMETHOD' and 
+GEN4.LANGUAGECODE='en-US' 
+left join genconstant gen3 on GEN3.CONSTANTVALUE=IPORPP.CO_IN_TYPE and GEN3.CATEGORY='CALCMETHOD' and 
+GEN3.LANGUAGECODE='en-US' 
+left join genconstant gen5 on GEN5.CONSTANTVALUE=IPORPP.OONDedectableType and GEN5.CATEGORY='CALCMETHOD' and 
+GEN5.LANGUAGECODE='en-US' 
+left join genconstant gen6 on GEN6.CONSTANTVALUE=IPORPP.OONCo_In_Type and GEN6.CATEGORY='CALCMETHOD' and 
+gen6.LANGUAGECODE='en-US'
+
+IP Overrider Provider :
+
+select IPORP.*,GEN.CONSTANTNAME ApplicableForName,GEN2.CONSTANTNAME DedectableTypeName,PRO.ProviderName,   
+GEN3.CONSTANTNAME CoInTypeName ,GEN4.CONSTANTNAME LimitTypeName,GEN5.CONSTANTNAME OONDedectableTypeName ,
+GEN6.CONSTANTNAME OONCoInTypeName from IM_IP_OVERRIDEPROVIDERDET IPORP    
+left join IM_PROVIDERS pro on PRO.PROVIDERCODE=IPORP.PROVIDERCODE  
+left join genconstant gen on GEN.CONSTANTVALUE=IPORP.APPLICABLEFOR and GEN.CATEGORY='APPLICABLE' and 
+GEN.LANGUAGECODE='en-US' 
+left join genconstant gen2 on GEN2.CONSTANTVALUE=IPORP.DEDECTABLETYPE  and GEN2.CATEGORY='CALCMETHOD' and 
+GEN2.LANGUAGECODE='en-US' 
+left join genconstant gen4 on GEN4.CONSTANTVALUE=IPORP.LIMITTYPE  and GEN4.CATEGORY='CALCMETHOD' and 
+GEN4.LANGUAGECODE='en-US' 
+left join genconstant gen3 on GEN3.CONSTANTVALUE=IPORP.CO_IN_TYPE and GEN3.CATEGORY='CALCMETHOD' and 
+GEN3.LANGUAGECODE='en-US' 
+left join genconstant gen5 on GEN5.CONSTANTVALUE=IPORP.OONDedectableType and GEN5.CATEGORY='CALCMETHOD' and 
+GEN5.LANGUAGECODE='en-US' 
+left join genconstant gen6 on GEN6.CONSTANTVALUE=IPORP.OONCo_In_Type and GEN6.CATEGORY='CALCMETHOD' and 
+GEN6.LANGUAGECODE='en-US' 
+
+Exclusion Std Code : 
+
+select ibes.*,Ver.CODE, Ver.SHORTDESC ShortDescription, Ver.LONGDESC LongDescription  from IM_IP_EXCLUSION_STDCODEDTL  ibes left join IM_VERSION_DETALIS Ver on VER.DETAILCODE =IBES.STANDARD_CODE;
+
+Exclusion Code :
+
+select Ex.*,ExGro.EXC_GROUP_NAME ExclutionGroupName from IM_IP_EXCLUSIONDTL Ex   left join IM_EXCLUSIONS_GROUPS_MASTER  ExGro on ExGro.EXC_GRP_CODE=Ex.EXC_GROUP_CODE;
+
+
+Age Wise Premium Sub Detail :
+
+select ibr.*,GEN1.CONSTANTNAME RelationTypeName from IM_INDPOLCATEGORYAGERELATION ibr  
+LEFT join genconstant gen1 on GEN1.CONSTANTVALUE=ibr.RELATIONTYPECODE and GEN1.CATEGORY='MEMBERRELATION' and 
+gen1.languagecode='en-US';
+

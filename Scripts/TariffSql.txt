@@ -1,0 +1,358 @@
+PROCEDURE excel_to_form_test2 IS
+   Application              OLE2.Obj_Type;
+   Workbooks                OLE2.Obj_Type;
+   Workbook                 OLE2.Obj_Type;
+   Worksheets               OLE2.Obj_Type;
+   Worksheet                OLE2.Obj_Type;
+   Worksheet2               OLE2.Obj_Type;
+   Cell                     OLE2.Obj_Type;
+   Args                     OLE2.Obj_Type;
+   Cell_Value               VARCHAR2 (1000);
+   Num_Wrkshts              NUMBER;
+   Wksht_Name               VARCHAR2 (1000);
+   Eod                      BOOLEAN := FALSE;
+   Eod1                     BOOLEAN := FALSE;
+   r                        NUMBER := 2;
+   -- c      number := 1;
+   l_No_Of_Cols             NUMBER := 51;
+   v_Fname                  VARCHAR2 (500);
+   l_Row                    NUMBER := 1;
+
+   COL_1                    VARCHAR2 (500);                         -- Number;
+   COL_2                    VARCHAR2 (500);                         -- Number;
+   COL_3                    VARCHAR2 (500);                         -- Number;
+   COL_4                    VARCHAR2 (500);                         -- Number;
+   COL_5                    VARCHAR2 (500);                         -- Number;
+   COL_6                    VARCHAR2 (500);                         -- Number;
+   COL_7                    VARCHAR2 (500);                         -- Number;
+   COL_8                    VARCHAR2 (500);                         -- Number;
+   COL_9                    VARCHAR2 (500);
+   COL_10                   VARCHAR2 (500);                         -- Number;
+   COL_11                   VARCHAR2 (500);                         -- Number;
+   COL_12                   VARCHAR2 (500);                         -- Number;
+   l_Exists                 VARCHAR2 (5000);                        -- Number;
+   l_Operation_Flage        VARCHAR2 (5000);
+   student_count            NUMBER;
+   L_NEXTCARECLAIMHDRCODE   VARCHAR2 (1000);
+   L_COMMIT                 NUMBER;
+   serv_Fname               VARCHAR2 (500)
+      := 'c:\temp\' || 'F' || TO_CHAR (SYSDATE, 'ddmmyyyyhh24miss') || '.xls';
+BEGIN
+   -- Get the name of the file to open
+   v_Fname :=
+      Webutil_File.File_Open_Dialog (
+         Directory_Name   => 'C:\',
+         File_Filter      => NULL,
+         Title            => 'Select Client filename to Open.');
+
+   -- Make sure the user selected a file
+
+
+   IF (v_Fname IS NOT NULL)
+   THEN
+      IF WEBUTIL_FILE_TRANSFER.client_to_as (v_Fname, serv_Fname) --copy the xls file to application server 
+      THEN
+         
+         -- The following sets up communication with the excel spreadsheet
+
+         -- --------------------------------------------------------------
+
+         -- Open the OLE application
+
+         Application := OLE2.Create_Obj ('Excel.Application');
+
+         -- Keep the application hidden
+
+         OLE2.Set_Property (Application, 'Visible', 'false');
+
+         Workbooks := OLE2.Get_Obj_Property (Application, 'Workbooks');
+
+         Args := OLE2.Create_Arglist;
+
+         -- Open the selected File
+
+         -- ----------------------
+
+         OLE2.Add_Arg (Args, serv_Fname);
+
+         Workbook := OLE2.Get_Obj_Property (Workbooks, 'Open', Args);
+
+         OLE2.Destroy_Arglist (Args);
+
+         Worksheets := OLE2.Get_Obj_Property (Workbook, 'Worksheets');
+
+         --  Message('Work sheet 1 ' || Worksheets) ;
+
+         -- Get number of worksheets
+
+         -- ------------------------
+
+         Num_Wrkshts := OLE2.Get_Num_Property (Worksheets, 'Count');
+         -- Message('count of worksheets ' ||  Num_wrkshts) ;
+
+         Worksheet := OLE2.Get_Obj_Property (Application, 'activesheet');
+
+         delete from  IM_EUTEMPLATE_PROVIDER_TARIFF;
+
+         COMMIT;
+         L_COMMIT := 1;
+
+         LOOP
+            -- Exit when the last row of the spreadsheet is reached.
+
+            EXIT WHEN Eod = TRUE;
+
+            l_Operation_Flage := NULL;
+
+---------------------------
+              Args := OLE2.Create_Arglist;
+               OLE2.Add_Arg (Args, r);
+               OLE2.Add_Arg (Args, 1);
+               Cell := OLE2.Get_Obj_Property (Worksheet, 'Cells', Args);
+               OLE2.Destroy_Arglist (Args);
+               Cell_Value := OLE2.Get_Char_Property (Cell, 'Value');
+---------------------------------
+              
+              IF     (   LENGTH (Cell_Value) = 0 OR Cell_Value IS NULL OR UPPER (Cell_Value) = 'NULL') --AND c = 1
+               THEN
+                  Eod := TRUE;
+                  
+                    update  IM_TARIFF_UPLOADLOG set IMAGEFILE = v_Fname where LOGCODE = :IM_TARIFF_UPLOADLOG.LOGCODE;
+
+                 COMMIT;
+                  EXIT;
+            END IF;
+----------------
+
+            -------------------------------VALUE1---------------------------------------------
+            FOR c IN 1 .. 12
+            LOOP
+              
+               IF c in (1,7,8,9,12)
+                 THEN
+               Args := OLE2.Create_Arglist;
+               OLE2.Add_Arg (Args, r);
+               OLE2.Add_Arg (Args, c);
+               Cell := OLE2.Get_Obj_Property (Worksheet, 'Cells', Args);
+               OLE2.Destroy_Arglist (Args);
+               Cell_Value := (OLE2.get_num_property (Cell, 'Value'));
+               ELSIF C IN (10,11)
+                 THEN
+                  Args := OLE2.Create_Arglist;
+               OLE2.Add_Arg (Args, r);
+               OLE2.Add_Arg (Args, c);
+               Cell := OLE2.Get_Obj_Property (Worksheet, 'Cells', Args);
+               OLE2.Destroy_Arglist (Args);
+               Cell_Value :=   to_date('01/01/1900', 'MM/DD/RRRR') + ole2.get_num_property(cell, 'Value') - 2;
+               ELSE 
+                  Args := OLE2.Create_Arglist;
+               OLE2.Add_Arg (Args, r);
+               OLE2.Add_Arg (Args, c);
+               Cell := OLE2.Get_Obj_Property (Worksheet, 'Cells', Args);
+               OLE2.Destroy_Arglist (Args);
+               Cell_Value :=  ole2.get_char_property(cell, 'Value');
+               END IF;
+
+
+               IF c = 1
+               THEN
+                  COL_1 := (Cell_Value);
+               ELSIF c = 2
+               THEN
+                  COL_2 := (Cell_Value);
+                  
+               ELSIF c = 3
+               THEN
+                  COL_3 := (Cell_Value);
+               ELSIF c = 4
+               THEN
+                  COL_4 := (Cell_Value);
+               ELSIF c = 5
+               THEN
+                  COL_5 := (Cell_Value);
+               ELSIF c = 6
+               THEN
+                  COL_6 := (Cell_Value);
+               ELSIF c = 7
+               THEN
+                  COL_7 := (Cell_Value);
+               ELSIF c = 8
+               THEN
+                  COL_8 := (Cell_Value);
+               ELSIF c = 9
+               THEN
+                  COL_9 := (Cell_Value);
+               ELSIF c = 10
+               THEN
+                  COL_10 := (Cell_Value);
+               ELSIF c = 11
+               THEN
+                  COL_11 := (Cell_Value);
+               ELSIF c = 12
+               THEN
+                  COL_12 := (Cell_Value);
+               ELSE
+                  NULL;
+               END IF;
+
+               --  msg_alert('r  '||r ||' c  '||c,'');
+               -- msg_alert('COL_1   '||COL_1,'COL_1'||COL_1);
+               --   c    := c + 1;
+               -----------------------------------------------------------------------------
+           /*    IF     (   LENGTH (Cell_Value) = 0
+                       OR Cell_Value IS NULL
+                       OR UPPER (Cell_Value) = 'NULL')
+                  AND c = 1
+               THEN
+                  Eod := TRUE;
+
+                 UPDATE IM_TPAPRODUCTION_HDR SET FILENAME = v_Fname WHERE TPAPRODHDRCODE = :IM_TPAPRODUCTION_HDR1.TPAPRODHDRCODE ;
+
+                  -- Msg_Alert('Data Upload Successfully', 'Data Upload Successfully');
+                  COMMIT;
+                  EXIT;
+               END IF;*/
+            -------------------------------VALUE2----------------------------------------
+
+
+            --  msg_alert('COL_20    '||COL_20,'COL_20'||COL_20);
+            -----------------------------------------------------------------------------
+
+
+
+            -- msg_alert('insert_data','insert_data');
+            -- exit when c >= l_No_Of_Cols;
+            -- c    := 1;
+            -- This is my way; which is more efficient and less code
+
+            END LOOP;                                                    --for
+
+ Insert Into IM_EUTEMPLATE_PROVIDER_TARIFF
+            (SNO,
+  VERSIONID             ,
+  VERSION_CODE              ,
+  INTERNAL_CODE         ,
+  FULL_DESC        ,
+  SHORT_DESC  ,
+  GROSS_PRICE    ,
+  DISCOUNT_VALUE      ,
+  NET_PRICE       ,
+  EFFECTIVE_FROM       ,
+  EFFECTIVE_TO  ,
+  STATUS         
+      )
+            Values
+            (COL_1,
+             COL_2,
+             COL_3,
+             COL_4,
+             COL_5,
+             COL_6,
+             COL_7,
+             COL_8,
+             COL_9,
+             COL_10,
+             COL_11,
+             COL_12
+             );
+           COMMIT;
+            --
+            /* L_COMMIT := L_COMMIT +1;
+             IF L_COMMIT = 100 THEN
+
+              L_COMMIT := 1;
+              END IF;*/
+            r := r + 1;
+         --    c := 1;
+         END LOOP;                                                 --main loop
+
+         COMMIT;
+
+         -- Release the CLIENT_OLE2 object handles
+
+         IF (Cell IS NOT NULL)
+         THEN
+            OLE2.RELEASE_OBJ (Cell);
+         END IF;
+
+         IF (Worksheet IS NOT NULL)
+         THEN
+            OLE2.RELEASE_OBJ (Worksheet);
+         END IF;
+
+         IF (Worksheets IS NOT NULL)
+         THEN
+            OLE2.RELEASE_OBJ (Worksheets);
+         END IF;
+
+         IF (Worksheet2 IS NOT NULL)
+         THEN
+            OLE2.RELEASE_OBJ (Worksheet2);
+         END IF;
+
+         IF (Workbook IS NOT NULL)
+         THEN
+            OLE2.RELEASE_OBJ (Workbook);
+         END IF;
+
+         IF (Workbooks IS NOT NULL)
+         THEN
+            OLE2.RELEASE_OBJ (Workbooks);
+         END IF;
+
+         OLE2.Invoke (Application, 'Quit');
+         OLE2.RELEASE_OBJ (Application);
+         HOST ('cmd /c DEL ' || serv_Fname);
+      ELSE
+         MESSAGE ('Error  on uploading file');
+         MESSAGE (' ');
+         RAISE Form_Trigger_Failure;
+      END IF;
+   ELSE
+      MESSAGE ('No File selected.');
+      MESSAGE (' ');
+      RAISE Form_Trigger_Failure;
+   END IF;
+
+   MESSAGE ('All done');
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      IF (Cell IS NOT NULL)
+      THEN
+         OLE2.RELEASE_OBJ (Cell);
+      END IF;
+
+      IF (Worksheet IS NOT NULL)
+      THEN
+         OLE2.RELEASE_OBJ (Worksheet);
+      END IF;
+
+      IF (Worksheets IS NOT NULL)
+      THEN
+         OLE2.RELEASE_OBJ (Worksheets);
+      END IF;
+
+      IF (Worksheet2 IS NOT NULL)
+      THEN
+         OLE2.RELEASE_OBJ (Worksheet2);
+      END IF;
+
+      IF (Workbook IS NOT NULL)
+      THEN
+         OLE2.RELEASE_OBJ (Workbook);
+      END IF;
+
+      IF (Workbooks IS NOT NULL)
+      THEN
+         OLE2.RELEASE_OBJ (Workbooks);
+      END IF;
+
+      OLE2.Invoke (Application, 'Quit');
+      OLE2.RELEASE_OBJ (Application);
+      HOST ('cmd /c DEL ' || serv_Fname);
+     -- Msg_Alert (SQLERRM, SQLERRM);
+END;
+
+
+FN_WEBSERVICE_UPLOAD

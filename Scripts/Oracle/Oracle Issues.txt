@@ -1,0 +1,12 @@
+Plan Master :
+
+Cannot save Benefit Detail. Undefined Message Error
+
+Agent Master :
+
+Show detail down to the record
+
+
+Agent Billing Detail Error :
+
+Show detail down to the record and there should be option to search by agent name or agent id

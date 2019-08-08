@@ -1,0 +1,14 @@
+1. Create,Update and Delete Accounts
+   1.1 Create Accounts Finished (Both in Screen and Unit Test)
+   1.2 Update Accounts Finished (Both in Screen and Unit Test)
+   1.3 Delete options is not available instead of delete we can inactive the Accounts
+2. Assign Module(s) to Accounts
+   2.1 Assign modules to accounts finished (Both in Screens and Unit Test)
+3. Create,Update and Delete Legal Entities   
+   3.1 Create  Entities Finished (Both in Screen and Unit Test)
+   3.2 Update  Entities Finished (Both in Screen and Unit Test)
+   3.3 Delete options is not available instead of delete we can inactive the  Entities
+4. Activate and Deactivate Legal Entities
+   4.1 Activate and Deactive legal entities finished ( Both in Screen and Unit Test)
+5. Assign Legal Entities to Accounts   
+   5.1

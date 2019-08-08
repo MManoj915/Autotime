@@ -1,0 +1,4 @@
+Total Amount of Document
+UW Year and Pin should be before reinsurer details
+Add Fac Percentage and Treaty Percentage in Report
+

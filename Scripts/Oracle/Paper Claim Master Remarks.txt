@@ -1,0 +1,9 @@
+1. Provider should be selected before add new button
+2. While Pressing add new button call the belwo function 
+
+SF_USERTARIFFPRICELIST_FNC(USERCODE,PROVIDERCODE,P_RESULT OUT PARAMATER)
+
+3.Encounter start Date should be the first field
+4.Card No should be valid and the encounter start date should fall between member startdate and enddate
+5. Highlight the Mandatory Fields
+6. Please keep the default values same like .Net system

@@ -1,0 +1,5 @@
+
+declare l_rules varchar2(500);p_result number;
+begin
+l_rules:=ngi_loadclaims_pro.NGI_REPROCESSECLAIMS(1,p_result);
+end;

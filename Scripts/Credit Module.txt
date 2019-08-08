@@ -1,0 +1,20 @@
+Master :
+
+Select ICM.*,Gen.ConstantName BillingTypeName,'' Preparation from IM_CREDITMODULE ICM  
+left join GenConstant Gen on Gen.Category = 'POLICYBILLINGTYPE' and Gen.Constantvalue = ICM.BillingType and Gen.LanguageCode = 'en-US'
+
+Detail :
+
+
+Select Dtl.*,IMA.Agent_Name_EN AgentName,IMB.Broker_Name_EN BrokerName,  IMG.Group_Name GroupName,Gen.ConstantName BillingTypeName 
+from IM_CreditModule_Dtl Dtl  
+left join IM_Agents IMA on IMA.AgentCode = Dtl.AgentCode  
+left join IM_Brokers IMB on IMB.BrokerCode = Dtl.BrokerCode  
+left join IM_Groups IMG on IMG.Group_Code = Dtl.GroupCode  
+left join GenConstant Gen on Gen.Category = 'POLICYBILLINGTYPE' and Gen.Constantvalue = Dtl.BillingType and Gen.LanguageCode = 'en-US' 
+where Dtl.CreditModuleCode=100000000000000221
+
+
+After save call the function 
+
+sf_creditmoduleaftersave_fnc(Primkey)

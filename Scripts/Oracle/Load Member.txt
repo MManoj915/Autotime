@@ -1,0 +1,21 @@
+Load Member Detail :
+
+select ime.* from (select  IME.MEMBER_CODE,ipc.MEMBERPOLICYCODE, (IME.FIRST_NAME||' '||IME.LAST_NAME) as MemberName,
+IME.DATE_OF_BIRTH,trunc(months_between(sysdate,ime.DATE_OF_BIRTH)/12) as Age,GEN.CONSTANTNAME as GenderName, 
+GEN1.CONSTANTNAME MemberRelationName,GEN2.CONSTANTNAME MaritalStatusName,GEN3.CONSTANTNAME as NationalityName,
+GC.CATEGORY_NAME CategoryName,IME.COMPANYCODE,0 SELECTCHECK,null as EffectiveDate,(select (MemDel.PREMIUM_VALUE)
+from IM_MEMBERPOLICYPREMIUMDTL  MemDel where MemDel.PREMIUM_TYPES=0 and MemDel.MEMBERPOLICYCODE=ipc.MEMBERPOLICYCODE ) 
+as BasePremium,ipc.MEMBERSTARTDATE,IME.PARENT_ID FROM
+im_members ime  
+left join genconstant gen on GEN.CONSTANTVALUE=IME.GENDER  and GEN.CATEGORY='Gender' and languagecode='en-US'  
+LEFT join genconstant gen1 on GEN1.CONSTANTVALUE=IME.RELATION and GEN1.CATEGORY='MEMBERRELATION' and 
+gen1.languagecode='en-US'  
+left join genconstant gen2 on GEN2.CONSTANTVALUE=IME.MARITAL_STATUS and GEN2.CATEGORY='MARITAL_STATUS' and 
+GEN2.LANGUAGECODE='en-US'  
+left join genconstant gen3 on GEN3.CONSTANTVALUE=IME.NATIONALITY and GEN3.CATEGORY='FND_NATIONALITY' and 
+GEN3.languagecode='en-US'  
+left join im_categories gc on GC.CATEGORY_CODE=IME.CATEGORY_CODE  
+left join IM_MEMBERPOLICY ipc on ipc.MEMBERCODE=IME.MEMBER_CODE 
+where IME.MEMBER_CODE  in (select MEMBERCODE from IM_MEMBERPOLICY WHERE 
+POLICYCODE=100000000000001636 and MEMBERENDDATE is null and TYPEE=1))ime
+order by nvl(IME.PARENT_ID,IME.MEMBER_CODE),nvl2(ime.PARENT_ID,0,1) desc 

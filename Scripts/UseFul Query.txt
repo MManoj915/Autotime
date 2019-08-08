@@ -1,0 +1,9 @@
+
+EDIT IM_CLAIM_PROCESS_DETAIL WHERE CLAIM_CODE IN
+(SELECT CLAIM_CODE FROM IM_CLAIM_PROCESS_HEADER WHERE ACR_FORM_NO='E2247976');
+
+
+
+EDIT im_claimmemberbatch where claimbatchcode in
+(select claimbatchcode from im_claimbatch where fromid='258')
+and ACR_FORM_NO='ZH142228';

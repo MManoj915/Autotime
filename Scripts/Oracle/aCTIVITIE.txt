@@ -1,0 +1,269 @@
+PROMPT CREATE OR REPLACE VIEW im_editactivity_vw
+CREATE OR REPLACE VIEW im_editactivity_vw (
+  olddeclineamount,
+  declineamount,
+  claim_code,
+  hnmamount,
+  activity_detail_code,
+  activity_code,
+  versiondetailcode,
+  tariffdetailcode,
+  price,
+  qty,
+  discount_amount,
+  coinsurance_amount,
+  deductible_amount,
+  benefit_code,
+  activity_status,
+  request_number,
+  request_date,
+  request_source,
+  request_type,
+  request_status,
+  provider_code,
+  is_blocked,
+  member_code,
+  authorizatoin_code,
+  createdin,
+  createdon,
+  createdby,
+  lastmodifiedon,
+  lastmodifiedby,
+  legalentitycode,
+  customercode,
+  locationcode,
+  companycode,
+  recover_from_provider,
+  denied_to_member,
+  prior_athorization_id,
+  utn_versioncode,
+  clinician_code,
+  total,
+  serialno,
+  map_value,
+  treatmenttypecode,
+  denial_reason,
+  priorauthorizationcode,
+  discountpercentage,
+  type,
+  cliniciancode,
+  denial_value,
+  approved_amount,
+  netamount,
+  requestamount,
+  requestqty,
+  providernetprice,
+  currency,
+  rate,
+  activity_remarks,
+  diagnosis_remarks,
+  activitystartdate,
+  activityenddate,
+  detailcode,
+  sys_activity_id,
+  isprimarydeductible,
+  issecondarydeductible,
+  coinsurance_percentage,
+  remarksadded,
+  reimbursementamt,
+  repaymentamt,
+  source_type,
+  source_code,
+  code,
+  aca_benefit_code,
+  acr_form_seq_no,
+  acr_form_no,
+  acr_sequence_no,
+  acr_form_type,
+  excessamount,
+  actualdeductamount,
+  priorauthorizationname,
+  treatmenttypename,
+  activitytypename,
+  activityvalue,
+  netprice,
+  detailname,
+  description,
+  longdescription,
+  benefitid,
+  benefitname,
+  calcdeductablebtn,
+  providerinternalcode,
+  currencyname,
+  providerinternaldesc,
+  typename,
+  activitychecked,
+  activitystatusname,
+  calculatededuct,
+  denialname,
+  shortdescription,
+  mainclaimrequestedamount,
+  mainclaimapprovedamount,
+  mainclaimdenialamount,
+  licenseid,
+  clinicianname,
+  specialityname,
+  majorname,
+  license_type,
+  orginaldeductibleamount,
+  isprocessed,
+  resubmissionclaimcode
+) AS
+SELECT DISTINCT
+            NEWACT.OLDDECLINEAMOUNT,
+            NEWACT.DECLINEAMOUNT,
+            NEWACT.CLAIM_CODE,
+            NEWACT.HNMAMOUNT,
+            NEWACT.ACTIVITY_DETAIL_CODE,
+            NEWACT.ACTIVITY_CODE,
+            NEWACT.VERSIONDETAILCODE,
+            NEWACT.TARIFFDETAILCODE,
+            NEWACT.PRICE,
+            NEWACT.QTY,
+            NEWACT.DISCOUNT_AMOUNT,
+            NEWACT.COINSURANCE_AMOUNT,
+            NEWACT.DEDUCTIBLE_AMOUNT,
+            NEWACT.BENEFIT_CODE,
+            NEWACT.ACTIVITY_STATUS,
+            NEWACT.REQUEST_NUMBER,
+            NEWACT.REQUEST_DATE,
+            NEWACT.REQUEST_SOURCE,
+            NEWACT.REQUEST_TYPE,
+            NEWACT.REQUEST_STATUS,
+            NEWACT.PROVIDER_CODE,
+            NEWACT.IS_BLOCKED,
+            NEWACT.MEMBER_CODE,
+            NEWACT.AUTHORIZATOIN_CODE,
+            NEWACT.CREATEDIN,
+            NEWACT.CREATEDON,
+            NEWACT.CREATEDBY,
+            NEWACT.LASTMODIFIEDON,
+            NEWACT.LASTMODIFIEDBY,
+            NEWACT.LEGALENTITYCODE,
+            NEWACT.CUSTOMERCODE,
+            NEWACT.LOCATIONCODE,
+            NEWACT.COMPANYCODE,
+            NEWACT.RECOVER_FROM_PROVIDER,
+            NEWACT.DENIED_TO_MEMBER,
+            NEWACT.PRIOR_ATHORIZATION_ID,
+            NEWACT.UTN_VERSIONCODE,
+            NEWACT.CLINICIAN_CODE,
+            NEWACT.TOTAL,
+            NEWACT.SERIALNO,
+            NEWACT.MAP_VALUE,
+            NEWACT.TREATMENTTYPECODE,
+            NEWACT.DENIAL_REASON,
+            NEWACT.PRIORAUTHORIZATIONCODE,
+            NEWACT.DISCOUNTPERCENTAGE,
+            NEWACT.TYPE,
+            NEWACT.CLINICIANCODE,
+            NEWACT.DENIAL_VALUE,
+            NEWACT.APPROVED_AMOUNT,
+            NEWACT.NETAMOUNT,
+            NVL (NEWACT.REQUESTAMOUNT, NEWACT.PRICE) REQUESTAMOUNT,
+            NEWACT.REQUESTQTY,
+            NEWACT.PROVIDERNETPRICE,
+            NEWACT.CURRENCY,
+            NEWACT.RATE,
+            NEWACT.ACTIVITY_REMARKS,
+            NEWACT.DIAGNOSIS_REMARKS,
+            NEWACT.ACTIVITYSTARTDATE,
+            NEWACT.ACTIVITYENDDATE,
+            NEWACT.DETAILCODE,
+            NEWACT.SYS_ACTIVITY_ID,
+            NEWACT.ISPRIMARYDEDUCTIBLE,
+            NEWACT.ISSECONDARYDEDUCTIBLE,
+            NEWACT.COINSURANCE_PERCENTAGE,
+            NEWACT.REMARKSADDED,
+            NEWACT.REIMBURSEMENTAMT,
+            NEWACT.REPAYMENTAMT,
+            NEWACT.SOURCE_TYPE,
+            NEWACT.SOURCE_CODE,
+            NEWACT.CODE,
+            NEWACT.ACA_BENEFIT_CODE,
+            NEWACT.ACR_FORM_SEQ_NO,
+            NEWACT.ACR_FORM_NO,
+            NEWACT.ACR_SEQUENCE_NO,
+            NEWACT.ACR_FORM_TYPE,
+            0 EXCESSAMOUNT,
+            0 ACTUALDEDUCTAMOUNT,
+            APPR.CPNO PRIORAUTHORIZATIONNAME,
+            GENCON.CONSTANTNAME TREATMENTTYPENAME,
+            ACTTYP.TYPENAME ACTIVITYTYPENAME,
+            ACTTYP.VALUE ACTIVITYVALUE,
+            VERDET.PACKAGE_PRICE_TO_PUBLIC NETPRICE,
+            NVL (VERDET.CODE, ECA.ACTIVITY_CODE) DETAILNAME,
+            VERDET.SHORTDESC AS DESCRIPTION,
+            VERDET.LONGDESC LONGDESCRIPTION,
+            BEN.BENEFIT_ID BENEFITID,
+            BEN.BENEFIT_NAME BENEFITNAME,
+            '' CALCDEDUCTABLEBTN,
+            PROINT.PROVIDERINTERNALCODE,
+            CUR.CURRENCYNAME,
+            PROINT.PROVIDERINTERNALDESC,
+            GEN.CONSTANTNAME TYPENAME,
+            ACTTYP.VALUE ACTIVITYCHECKED,
+            GEN1.CONSTANTNAME ACTIVITYSTATUSNAME,
+            BEN.CALCULATEDEDUCT,
+            UPPER (TRIM (IMVRDD.CODE)) DENIALNAME,
+            IMVRDD.SHORTDESC SHORTDESCRIPTION,
+            0 MAINCLAIMREQUESTEDAMOUNT,
+            0 MAINCLAIMAPPROVEDAMOUNT,
+            0 MAINCLAIMDENIALAMOUNT,
+            DECODE (PCL.HASGOVERNMENTLICENSE, 1, VER.CODE, OTHERLICNECEID)
+               LICENSEID,
+            IMC.NAME CLINICIANNAME,
+            IGEN.CONSTANTNAME SPECIALITYNAME,
+            IGEN1.CONSTANTNAME MAJORNAME,
+            '' LICENSE_TYPE,
+            NEWACT.ORGINALDEDUCTIBLEAMOUNT,
+            NEWACT.ISPROCESSED,NEWACT.CLAIM_CODE RESUBMISSIONCLAIMCODE
+       FROM IM_CLAIM_PROCESS_DETAIL NEWACT
+            LEFT JOIN ECLAIM_ACTIVITIES ECA
+               ON ECA.SYS_ACTIVITY_ID = NEWACT.SYS_ACTIVITY_ID
+            LEFT JOIN IM_ACTIVITY_TYPES ACTTYP
+               ON ACTTYP.TYPECODE = NEWACT.ACTIVITY_CODE
+            LEFT JOIN IM_VERSION_DETALIS VERDET
+               ON VERDET.DETAILCODE = NEWACT.VERSIONDETAILCODE
+            LEFT JOIN IM_BENEFIT_CODES BEN
+               ON BEN.BENEFIT_CODE = NEWACT.BENEFIT_CODE
+            LEFT JOIN GENCONSTANT GEN1
+               ON     GEN1.CONSTANTVALUE = NEWACT.ACTIVITY_STATUS
+                  AND GEN1.CATEGORY = 'DENIALSTATUS'
+                  AND GEN1.LANGUAGECODE = 'en-US'
+            LEFT JOIN GENCURRENCY CUR
+               ON CUR.CURRENCYCODE = NEWACT.CURRENCY
+            -- // LEFT JOIN IM_TYPE_VERSIONS VER ON VER.VERSIONCODE=VERDET.VERSIONCODE
+            LEFT JOIN IM_PROVIDER_TARIFF_DETAILS PROINT
+               ON PROINT.TARIFFDETAILCODE = NEWACT.TARIFFDETAILCODE
+            LEFT JOIN GENCONSTANT GEN
+               ON     UPPER (GEN.CONSTANTVALUE) = UPPER (NEWACT.TYPE)
+                  AND GEN.CATEGORY = 'IMDIAGNOSISTYPE'
+                  AND GEN.LANGUAGECODE = 'en-US'
+            LEFT JOIN IM_VERSION_DETALIS IMVRDD
+               ON (IMVRDD.DETAILCODE) = NEWACT.DENIAL_REASON
+            LEFT JOIN IM_CLAIM_REQUEST_HEADER APPR
+               ON APPR.CLAIM_CODE = NEWACT.PRIORAUTHORIZATIONCODE
+            LEFT JOIN GENCONSTANT GENCON
+               ON     GENCON.CATEGORY = 'APPLICABLE'
+                  AND GENCON.CONSTANTVALUE = NEWACT.TREATMENTTYPECODE
+                  AND GENCON.LANGUAGECODE = 'en-US'
+            LEFT JOIN IM_CLINICIANS IMC
+               ON IMC.CDCODE = NEWACT.CLINICIAN_CODE
+            LEFT JOIN IM_PROVIDER_CLINICIAN_LINK PCL
+               ON PCL.CLINICIANCODE = IMC.CDCODE
+                  AND PCL.PROVIDERCODE = APPR.PROVIDER_CODE
+            LEFT JOIN IM_VERSION_DETALIS VER
+               ON VER.DETAILCODE = PCL.LICENCEID
+            LEFT JOIN GENCONSTANT IGEN
+               ON     IGEN.CONSTANTVALUE = IMC.SPECIALTY
+                  AND IGEN.CATEGORY = 'SPECIALTY'
+                  AND IGEN.LANGUAGECODE = 'en-US'
+            LEFT JOIN GENCONSTANT IGEN1
+               ON     IGEN1.CONSTANTVALUE = IMC.MAJOR
+                  AND IGEN1.CATEGORY = 'CLINICIANMAJOR'
+                  AND IGEN1.LANGUAGECODE = 'en-US'
+      WHERE ACTTYP.VALUE <> -1
+   ORDER BY NEWACT.TOTAL ASC
+/
+

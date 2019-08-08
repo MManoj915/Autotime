@@ -1,0 +1,13 @@
+MED Posting Detail :
+
+select * from (select mdtl.* from IM_MEDFINANCEPOSTINGDTL mdtl where mdtl.MEDFinancePostingCode=100000000000008819);
+
+
+MED Posting Master : 
+
+select * from (select mdtl.* from IM_MEDFINANCEPOSTING mdtl where mdtl.MEDFinancePostingCode=100000000000008819);
+
+
+Call the below function after save :
+
+IM_FINANCE_POSTING.IM_MEDFINANCE_PAYMENT_FN(PrimaryKey);
